@@ -1,0 +1,102 @@
+name: Build APK AgriCactus Cuadrillero
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git zip unzip \
+            autoconf libtool pkg-config \
+            zlib1g-dev cmake libffi-dev \
+            libssl-dev nasm libltdl-dev
+
+      - name: Install buildozer
+        run: pip install buildozer cython
+
+      - name: Cache buildozer
+        uses: actions/cache@v4
+        with:
+          path: ~/.buildozer
+          key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+          restore-keys: |
+            buildozer-${{ runner.os }}-
+
+      - name: Setup Android SDK and licenses
+        run: |
+          SDK=$HOME/.buildozer/android/platform/android-sdk
+          mkdir -p $SDK/cmdline-tools
+          if [ ! -f "$SDK/cmdline-tools/latest/bin/sdkmanager" ]; then
+            curl -s https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o /tmp/cmdtools.zip
+            unzip -q /tmp/cmdtools.zip -d /tmp/cmdtools
+            mkdir -p $SDK/cmdline-tools/latest
+            cp -r /tmp/cmdtools/cmdline-tools/* $SDK/cmdline-tools/latest/
+          fi
+          mkdir -p $SDK/licenses
+          echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > $SDK/licenses/android-sdk-license
+          echo "d56f5187479451eabf01fb78af6dfcb131a6481e" >> $SDK/licenses/android-sdk-license
+          echo "8933bad161af4178b1185d1a37fbf41ea5269c55" >> $SDK/licenses/android-sdk-license
+          $SDK/cmdline-tools/latest/bin/sdkmanager \
+            --sdk_root=$SDK \
+            "build-tools;33.0.2" "platforms;android-33" "platform-tools"
+          mkdir -p $SDK/tools/bin
+          ln -sf $SDK/cmdline-tools/latest/bin/sdkmanager $SDK/tools/bin/sdkmanager
+
+      - name: Limpiar build anterior
+        run: |
+          rm -rf .buildozer/android/platform/build-arm64-v8a/build/python-installs
+          rm -rf .buildozer/android/platform/build-arm64-v8a/dists
+        continue-on-error: true
+
+      - name: Build APK
+        run: |
+          set -o pipefail
+          buildozer android debug 2>&1 | tee build_output.log
+          find . -name "*.apk" 2>/dev/null || echo "No APK encontrado"
+          tail -50 build_output.log
+
+      - name: Upload build log
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-log-cuadrillero
+          path: build_output.log
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: agricactus-cuadrillero-debug
+          path: bin/*.apk
+          if-no-files-found: warn
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        if: success()
+        with:
+          tag_name: cuadrillero-v${{ github.run_number }}
+          name: "AgriCactus Cuadrillero v${{ github.run_number }}"
+          files: bin/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
