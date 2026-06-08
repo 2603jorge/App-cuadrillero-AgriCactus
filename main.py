@@ -1,12 +1,6 @@
 # =============================================================================
 #  AgriCactus - App del CUADRILLERO  (main.py)
-#  v2.0 - Credencial digital, cámara, BLE scanner, WiFi UDP
-#
-#  PANTALLAS:
-#  1. Registro    — primera vez: datos + foto + credencial
-#  2. Credencial  — credencial digital activa del cuadrillero
-#  3. Asistencia  — escaneo BLE + validación WiFi de trabajadores
-#  4. Resumen     — lista del día + envío al apuntador
+#  v2.1 - Fix permisos BLE Android 12+
 # =============================================================================
 
 import datetime
@@ -75,13 +69,13 @@ else:
 
 # =============================================================================
 #  CONSTANTES
-#  =============================================================================
-ARCHIVO_DATOS    = "cuadrillero_data.json"
-ARCHIVO_LISTA    = "lista_asistencia.json"
-PUERTO_WIFI      = 45678
+# =============================================================================
+ARCHIVO_DATOS      = "cuadrillero_data.json"
+ARCHIVO_LISTA      = "lista_asistencia.json"
+PUERTO_WIFI        = 45678
 PUERTO_CUADRILLERO = 45679
 PUERTO_RECEPCION   = 45680
-UUID_PREFIX      = "0000ac10-0000-1000-8000-"
+UUID_PREFIX        = "0000ac10-0000-1000-8000-"
 
 # =============================================================================
 #  PERSISTENCIA
@@ -124,9 +118,6 @@ ScreenManager:
     PantallaResumen:
 
 
-# ═══════════════════════════════════════════════════════
-#  PANTALLA 1: REGISTRO
-# ═══════════════════════════════════════════════════════
 <PantallaRegistro>:
     name: 'registro'
 
@@ -236,22 +227,17 @@ ScreenManager:
             on_release: root.guardar_registro()
 
 
-# ═══════════════════════════════════════════════════════
-#  PANTALLA 2: CREDENCIAL DIGITAL DEL CUADRILLERO
-# ═══════════════════════════════════════════════════════
 <PantallaCredencial>:
     name: 'credencial'
 
     MDFloatLayout:
         md_bg_color: 0.96, 0.96, 0.94, 1
 
-        # Franja lateral verde
         MDFloatLayout:
             size_hint_x: 0.06
             pos_hint: {'x': 0, 'y': 0}
             md_bg_color: 0.18, 0.29, 0.12, 1
 
-        # Tarjeta principal
         MDCard:
             size_hint: (0.92, 0.72)
             pos_hint: {'right': 0.99, 'top': 0.97}
@@ -365,7 +351,6 @@ ScreenManager:
                         theme_text_color: "Custom"
                         text_color: 0.8, 0.9, 0.8, 1
 
-        # Botón iniciar jornada
         MDRaisedButton:
             text: "INICIAR JORNADA"
             md_bg_color: 0.18, 0.29, 0.12, 1
@@ -384,9 +369,6 @@ ScreenManager:
             on_release: app.root.current = 'registro'
 
 
-# ═══════════════════════════════════════════════════════
-#  PANTALLA 3: TOMA DE ASISTENCIA
-# ═══════════════════════════════════════════════════════
 <PantallaAsistencia>:
     name: 'asistencia'
 
@@ -429,7 +411,6 @@ ScreenManager:
             pos_hint: {'x': 0, 'top': 0.87}
             md_bg_color: 0.96, 0.65, 0.14, 1
 
-        # Campo cuadro/lote
         MDTextField:
             id: input_cuadro
             hint_text: "Cuadro / Lote de trabajo"
@@ -438,7 +419,6 @@ ScreenManager:
             size_hint: (0.96, None)
             height: '48dp'
 
-        # Stats bar
         MDCard:
             size_hint: (0.96, 0.10)
             pos_hint: {'center_x': 0.5, 'top': 0.75}
@@ -496,7 +476,6 @@ ScreenManager:
                         halign: "center"
                         theme_text_color: "Secondary"
 
-        # Lista trabajadores
         MDCard:
             size_hint: (0.96, 0.48)
             pos_hint: {'center_x': 0.5, 'top': 0.64}
@@ -522,7 +501,6 @@ ScreenManager:
                     MDList:
                         id: lista_trabajadores
 
-        # Botones
         MDBoxLayout:
             orientation: 'horizontal'
             size_hint: (0.96, 0.08)
@@ -554,9 +532,6 @@ ScreenManager:
             on_release: app.root.current = 'credencial'
 
 
-# ═══════════════════════════════════════════════════════
-#  PANTALLA 4: RESUMEN DEL DIA
-# ═══════════════════════════════════════════════════════
 <PantallaResumen>:
     name: 'resumen'
 
@@ -710,8 +685,8 @@ class PantallaRegistro(Screen):
             self.ids.label_foto.text    = f"OK: {os.path.basename(seleccion[0])}"
 
     def guardar_registro(self):
-        nombre    = self.ids.input_nombre.text.strip().upper()
-        nss       = self.ids.input_nss.text.strip()
+        nombre     = self.ids.input_nombre.text.strip().upper()
+        nss        = self.ids.input_nss.text.strip()
         credencial = self.ids.input_credencial.text.strip()
         cuadrilla  = self.ids.input_cuadrilla.text.strip()
 
@@ -749,17 +724,17 @@ class PantallaRegistro(Screen):
         pc.ruta_foto          = self.ruta_foto_seleccionada
         pc.fecha_ingreso      = datetime.date.today().strftime("%d/%m/%Y")
 
-        app.num_cuadrilla        = cuadrilla
-        app.nombre_cuadrillero   = nombre_fmt
+        app.num_cuadrilla      = cuadrilla
+        app.nombre_cuadrillero = nombre_fmt
 
         datos = {
-            "nombre":              nombre_fmt,
-            "nss":                 nss,
-            "credencial":          credencial,
-            "cuadrilla":           cuadrilla,
-            "foto":                self.ruta_foto_seleccionada,
-            "fecha_ingreso":       pc.fecha_ingreso,
-            "ultima_sesion":       datetime.datetime.now().isoformat()
+            "nombre":        nombre_fmt,
+            "nss":           nss,
+            "credencial":    credencial,
+            "cuadrilla":     cuadrilla,
+            "foto":          self.ruta_foto_seleccionada,
+            "fecha_ingreso": pc.fecha_ingreso,
+            "ultima_sesion": datetime.datetime.now().isoformat()
         }
         guardar_datos(datos)
 
@@ -776,6 +751,40 @@ class PantallaCredencial(Screen):
     ruta_foto          = StringProperty("")
 
     def ir_a_asistencia(self):
+        if platform == 'android':
+            try:
+                from android.permissions import request_permissions, Permission, check_permission
+
+                permisos_necesarios = [
+                    Permission.BLUETOOTH_SCAN,
+                    Permission.BLUETOOTH_CONNECT,
+                    Permission.BLUETOOTH_ADMIN,
+                    Permission.ACCESS_FINE_LOCATION,
+                    Permission.ACCESS_COARSE_LOCATION,
+                ]
+
+                todos_concedidos = all(
+                    check_permission(p) for p in permisos_necesarios
+                )
+
+                if not todos_concedidos:
+                    def _on_permisos(permisos, concedidos):
+                        if all(concedidos):
+                            self._continuar_a_asistencia()
+                        else:
+                            Snackbar(
+                                text="Se necesitan permisos de Bluetooth y Ubicacion"
+                            ).open()
+
+                    request_permissions(permisos_necesarios, _on_permisos)
+                    return
+
+            except Exception as e:
+                print(f"[PERMISOS] Error: {e}")
+
+        self._continuar_a_asistencia()
+
+    def _continuar_a_asistencia(self):
         app = MDApp.get_running_app()
         pa  = app.root.get_screen('asistencia')
         pa.titulo_sesion = f"Cuadrilla {self.num_cuadrilla}"
@@ -830,13 +839,15 @@ class PantallaAsistencia(Screen):
             if not app.trabajadores_detectados[cred].get('validado'):
                 app.enviar_validacion_wifi(cred)
                 count += 1
-        Snackbar(text=f"{count} trabajador(es) validados" if count
-                 else "Todos ya estan validados").open()
+        Snackbar(
+            text=f"{count} trabajador(es) validados" if count
+            else "Todos ya estan validados"
+        ).open()
 
     def ver_resumen(self):
-        app = MDApp.get_running_app()
+        app    = MDApp.get_running_app()
         cuadro = self.ids.input_cuadro.text.strip().upper() or "SIN CUADRO"
-        pr = app.root.get_screen('resumen')
+        pr     = app.root.get_screen('resumen')
         pr.construir_resumen(
             app.trabajadores_detectados,
             app.nombre_cuadrillero,
@@ -844,7 +855,7 @@ class PantallaAsistencia(Screen):
             cuadro
         )
         app.cuadro_trabajo = cuadro
-        app.root.current = 'resumen'
+        app.root.current   = 'resumen'
 
 
 class PantallaResumen(Screen):
@@ -937,9 +948,21 @@ class CuadrilleroAgriCactusApp(MDApp):
             self._simular_deteccion_escritorio()
             return
         try:
+            if platform == 'android':
+                from android.permissions import check_permission, Permission
+                if not check_permission(Permission.BLUETOOTH_SCAN):
+                    Snackbar(text="Permiso Bluetooth_Scan no concedido").open()
+                    return
+                if not check_permission(Permission.ACCESS_FINE_LOCATION):
+                    Snackbar(text="Permiso de ubicacion requerido para BLE").open()
+                    return
+
             adaptador = BluetoothAdapter.getDefaultAdapter()
-            if not (adaptador and adaptador.isEnabled()):
-                Snackbar(text="Activa el Bluetooth").open()
+            if not adaptador:
+                Snackbar(text="Dispositivo sin Bluetooth").open()
+                return
+            if not adaptador.isEnabled():
+                Snackbar(text="Activa el Bluetooth e intenta de nuevo").open()
                 return
 
             self._ble_scanner = adaptador.getBluetoothLeScanner()
@@ -948,17 +971,16 @@ class CuadrilleroAgriCactusApp(MDApp):
                 return
 
             self._scan_callback = _ScanCallback(self._al_detectar_ble)
-
             sb = ScanSettings.Builder()
             sb.setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             settings = sb.build()
-
             self._ble_scanner.startScan(None, settings, self._scan_callback)
             self._escaneo_activo = True
 
             pa = self.root.get_screen('asistencia')
             pa.estado_escaneo       = "Activo"
             pa.color_estado_escaneo = [0.18, 0.29, 0.12, 1]
+            Snackbar(text="Escaneo BLE iniciado").open()
 
         except Exception as e:
             print(f"[BLE SCAN] Error: {e}")
@@ -1016,7 +1038,6 @@ class CuadrilleroAgriCactusApp(MDApp):
                     sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
                     sock.settimeout(3.0)
                     sock.sendto(mensaje.encode('utf-8'), ('255.255.255.255', PUERTO_WIFI))
-
                     try:
                         resp_raw, addr = sock.recvfrom(256)
                         resp = resp_raw.decode('utf-8').strip()
@@ -1035,8 +1056,8 @@ class CuadrilleroAgriCactusApp(MDApp):
 
     def _confirmar_validacion(self, credencial, ip):
         if credencial in self.trabajadores_detectados:
-            self.trabajadores_detectados[credencial]['validado']         = True
-            self.trabajadores_detectados[credencial]['hora_validacion']  = \
+            self.trabajadores_detectados[credencial]['validado']        = True
+            self.trabajadores_detectados[credencial]['hora_validacion'] = \
                 datetime.datetime.now().strftime("%H:%M:%S")
             if ip:
                 self.trabajadores_detectados[credencial]['ip'] = ip
