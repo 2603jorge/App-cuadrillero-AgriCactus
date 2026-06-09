@@ -953,59 +953,58 @@ class CuadrilleroAgriCactusApp(MDApp):
         print(f"[TEST CUADRILLERO] {msg}")
 
    def iniciar_escaneo_ble(self):
-    if not BLE_SCAN_DISPONIBLE:
-        self._simular_deteccion_escritorio()
-        return
-    try:
-        if platform == 'android':
-            from android.permissions import check_permission, Permission
-            from jnius import autoclass as _ac
-            sdk = _ac('android.os.Build$VERSION').SDK_INT
-            if sdk >= 31:
-                if not check_permission(Permission.BLUETOOTH_SCAN):
-                    Snackbar(text="Falta permiso BLUETOOTH_SCAN").open()
+        if not BLE_SCAN_DISPONIBLE:
+            self._simular_deteccion_escritorio()
+            return
+        try:
+            if platform == 'android':
+                from android.permissions import check_permission, Permission
+                from jnius import autoclass as _ac
+                sdk = _ac('android.os.Build$VERSION').SDK_INT
+                if sdk >= 31:
+                    if not check_permission(Permission.BLUETOOTH_SCAN):
+                        Snackbar(text="Falta permiso BLUETOOTH_SCAN").open()
+                        return
+                else:
+                    if not check_permission(Permission.BLUETOOTH):
+                        Snackbar(text="Falta permiso BLUETOOTH").open()
+                        return
+                if not check_permission(Permission.ACCESS_FINE_LOCATION):
+                    Snackbar(text="Falta permiso de ubicacion").open()
                     return
-            else:
-                if not check_permission(Permission.BLUETOOTH):
-                    Snackbar(text="Falta permiso BLUETOOTH").open()
-                    return
-            if not check_permission(Permission.ACCESS_FINE_LOCATION):
-                Snackbar(text="Falta permiso de ubicacion").open()
+
+            adaptador = BluetoothAdapter.getDefaultAdapter()
+            if not adaptador:
+                Snackbar(text="Dispositivo sin Bluetooth").open()
+                return
+            if not adaptador.isEnabled():
+                Snackbar(text="Activa el Bluetooth").open()
                 return
 
-        adaptador = BluetoothAdapter.getDefaultAdapter()
-        if not adaptador:
-            Snackbar(text="Dispositivo sin Bluetooth").open()
-            return
-        if not adaptador.isEnabled():
-            Snackbar(text="Activa el Bluetooth").open()
-            return
+            self._ble_scanner = adaptador.getBluetoothLeScanner()
+            if not self._ble_scanner:
+                Snackbar(text="BLE Scanner no disponible").open()
+                return
 
-        self._ble_scanner = adaptador.getBluetoothLeScanner()
-        if not self._ble_scanner:
-            Snackbar(text="BLE Scanner no disponible").open()
-            return
+            self._scan_callback = _ScanCallback(self._al_detectar_ble)
+            sb = ScanSettings.Builder()
+            sb.setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+            settings = sb.build()
 
-        self._scan_callback = _ScanCallback(self._al_detectar_ble)
-        sb = ScanSettings.Builder()
-        sb.setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-        settings = sb.build()
+            try:
+                self._ble_scanner.startScan(None, settings, self._scan_callback)
+                self._escaneo_activo = True
+                pa = self.root.get_screen('asistencia')
+                pa.estado_escaneo       = "Activo"
+                pa.color_estado_escaneo = [0.18, 0.29, 0.12, 1]
+                Snackbar(text="Escaneo BLE iniciado OK").open()
+            except Exception as e:
+                Snackbar(text=f"startScan fallo: {e}").open()
+                print(f"[BLE] startScan error: {e}")
 
-        # ✅ startScan con captura de error específica
-        try:
-            self._ble_scanner.startScan(None, settings, self._scan_callback)
-            self._escaneo_activo = True
-            pa = self.root.get_screen('asistencia')
-            pa.estado_escaneo       = "Activo"
-            pa.color_estado_escaneo = [0.18, 0.29, 0.12, 1]
-            Snackbar(text="Escaneo BLE iniciado OK").open()
         except Exception as e:
-            Snackbar(text=f"startScan fallo: {e}").open()
-            print(f"[BLE] startScan error: {e}")
-
-    except Exception as e:
-        print(f"[BLE SCAN] Error: {e}")
-        Snackbar(text=f"Error BLE: {e}").open()
+            print(f"[BLE SCAN] Error: {e}")
+            Snackbar(text=f"Error BLE: {e}").open()
 
     def detener_escaneo_ble(self):
         if BLE_SCAN_DISPONIBLE and self._ble_scanner and self._scan_callback:
