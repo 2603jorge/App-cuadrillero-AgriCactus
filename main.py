@@ -1,6 +1,6 @@
 # =============================================================================
 #  AgriCactus - App del CUADRILLERO  (main.py)
-#  v2.7 - Sin verificacion de permisos en iniciar_escaneo_ble
+#  v3.0 - WiFi UDP puro, sin BLE
 # =============================================================================
 
 import datetime
@@ -24,62 +24,25 @@ try:
 except Exception:
     GPS_DISPONIBLE = False
 
-if platform == 'android':
-    try:
-        from jnius import autoclass, PythonJavaClass, java_method
-        BluetoothAdapter = autoclass('android.bluetooth.BluetoothAdapter')
-        ScanSettings     = autoclass('android.bluetooth.le.ScanSettings')
-
-        class _ScanCallback(PythonJavaClass):
-            __javainterfaces__ = ['android/bluetooth/le/ScanCallback']
-            __javacontext__ = 'app'
-
-            def __init__(self, on_encontrado):
-                super().__init__()
-                self._on_encontrado = on_encontrado
-
-            @java_method('(ILandroid/bluetooth/le/ScanResult;)V')
-            def onScanResult(self, callbackType, result):
-                uuid = None
-                sr = result.getScanRecord()
-                if sr:
-                    uuids = sr.getServiceUuids()
-                    if uuids and not uuids.isEmpty():
-                        uuid = str(uuids.get(0).getUuid())
-                Clock.schedule_once(
-                    lambda dt: self._on_encontrado(uuid, result.getRssi()), 0
-                )
-
-            @java_method('(Ljava/util/List;)V')
-            def onBatchScanResults(self, results):
-                pass
-
-            @java_method('(II)V')
-            def onScanFailed(self, errorCode):
-                print(f"[BLE SCAN] Error: {errorCode}")
-
-        BLE_SCAN_DISPONIBLE = True
-    except Exception as e:
-        print(f"[BLE] No disponible: {e}")
-        BLE_SCAN_DISPONIBLE = False
-else:
-    BLE_SCAN_DISPONIBLE = False
-
+# =============================================================================
+#  CONSTANTES
+# =============================================================================
 ARCHIVO_DATOS      = "cuadrillero_data.json"
 ARCHIVO_LISTA      = "lista_asistencia.json"
-PUERTO_WIFI        = 45678
-PUERTO_CUADRILLERO = 45679
-PUERTO_RECEPCION   = 45680
-UUID_PREFIX        = "0000ac10-0000-1000-8000-"
+PUERTO_ANUNCIO     = 45678   # Escucha anuncios de trabajadores
+PUERTO_VALIDACION  = 45679   # Envia validaciones a trabajadores
+PUERTO_CUADRILLERO = 45680   # Escucha peticiones del apuntador
+PUERTO_RECEPCION   = 45681   # Apuntador recibe lista
 
-
+# =============================================================================
+#  PERSISTENCIA
+# =============================================================================
 def guardar_datos(datos: dict):
     try:
         with open(ARCHIVO_DATOS, 'w', encoding='utf-8') as f:
             json.dump(datos, f, ensure_ascii=False, indent=2)
     except Exception as e:
         print(f"[STORAGE] Error: {e}")
-
 
 def cargar_datos() -> dict:
     if os.path.exists(ARCHIVO_DATOS):
@@ -89,7 +52,6 @@ def cargar_datos() -> dict:
         except Exception:
             pass
     return {}
-
 
 def guardar_lista(datos: dict):
     try:
@@ -457,14 +419,14 @@ ScreenManager:
                 MDBoxLayout:
                     orientation: 'vertical'
                     MDLabel:
-                        text: root.estado_escaneo
+                        text: root.estado_escucha
                         font_style: "Caption"
                         bold: True
                         halign: "center"
                         theme_text_color: "Custom"
-                        text_color: root.color_estado_escaneo
+                        text_color: root.color_estado_escucha
                     MDLabel:
-                        text: "Estado BLE"
+                        text: "Estado WiFi"
                         font_style: "Caption"
                         halign: "center"
                         theme_text_color: "Secondary"
@@ -503,7 +465,7 @@ ScreenManager:
             MDRaisedButton:
                 text: "VALIDAR TODOS"
                 md_bg_color: 0.18, 0.29, 0.12, 1
-                size_hint_x: 0.34
+                size_hint_x: 0.5
                 elevation: 3
                 on_release: root.validar_todos()
 
@@ -511,16 +473,9 @@ ScreenManager:
                 text: "VER RESUMEN"
                 md_bg_color: 0.96, 0.65, 0.14, 1
                 text_color: 0.18, 0.29, 0.12, 1
-                size_hint_x: 0.33
+                size_hint_x: 0.5
                 elevation: 3
                 on_release: root.ver_resumen()
-
-            MDRaisedButton:
-                text: "TEST"
-                md_bg_color: 0.29, 0.40, 0.25, 1
-                size_hint_x: 0.33
-                elevation: 3
-                on_release: app.test_scan()
 
         MDRectangleFlatButton:
             text: "MI CREDENCIAL"
@@ -608,7 +563,6 @@ ScreenManager:
 
 class PantallaRegistro(Screen):
     ruta_foto_seleccionada = ""
-    _ruta_foto_camara      = ""
 
     def tomar_foto(self):
         if platform == 'android':
@@ -739,65 +693,23 @@ class PantallaCredencial(Screen):
     ruta_foto          = StringProperty("")
 
     def ir_a_asistencia(self):
-        if platform == 'android':
-            try:
-                from android.permissions import request_permissions, Permission, check_permission
-                from jnius import autoclass as _ac
-                BuildVersion = _ac('android.os.Build$VERSION')
-                sdk = BuildVersion.SDK_INT
-
-                if sdk >= 31:
-                    permisos_necesarios = [
-                        Permission.BLUETOOTH_SCAN,
-                        Permission.BLUETOOTH_CONNECT,
-                        Permission.ACCESS_FINE_LOCATION,
-                    ]
-                else:
-                    permisos_necesarios = [
-                        Permission.BLUETOOTH,
-                        Permission.ACCESS_FINE_LOCATION,
-                    ]
-
-                todos_concedidos = all(
-                    check_permission(p) for p in permisos_necesarios
-                )
-                Snackbar(text=f"SDK:{sdk} Permisos:{todos_concedidos}").open()
-
-                if not todos_concedidos:
-                    def _on_permisos(permisos, concedidos):
-                        if all(concedidos):
-                            Clock.schedule_once(
-                                lambda dt: self._continuar_a_asistencia(), 0.5
-                            )
-                        else:
-                            Snackbar(text="Acepta TODOS los permisos").open()
-                    request_permissions(permisos_necesarios, _on_permisos)
-                    return
-
-            except Exception as e:
-                Snackbar(text=f"Error permisos: {e}").open()
-                print(f"[PERMISOS] Error: {e}")
-
-        self._continuar_a_asistencia()
-
-    def _continuar_a_asistencia(self):
-        Snackbar(text="Iniciando jornada...").open()
         app = MDApp.get_running_app()
         pa  = app.root.get_screen('asistencia')
         pa.titulo_sesion = f"Cuadrilla {self.num_cuadrilla}"
         pa.fecha_hoy     = datetime.datetime.now().strftime("%d/%m/%Y  %H:%M")
-        app.iniciar_escaneo_ble()
+        app.iniciar_escucha_trabajadores()
         app.iniciar_respuesta_apuntador()
         app.root.current = 'asistencia'
+        Snackbar(text="Escuchando trabajadores...").open()
 
 
 class PantallaAsistencia(Screen):
-    titulo_sesion        = StringProperty("Cuadrilla")
-    fecha_hoy            = StringProperty("")
-    total_presentes      = StringProperty("0")
-    total_detectados     = StringProperty("0")
-    estado_escaneo       = StringProperty("Inactivo")
-    color_estado_escaneo = ListProperty([0.6, 0.6, 0.6, 1])
+    titulo_sesion       = StringProperty("Cuadrilla")
+    fecha_hoy           = StringProperty("")
+    total_presentes     = StringProperty("0")
+    total_detectados    = StringProperty("0")
+    estado_escucha      = StringProperty("Inactivo")
+    color_estado_escucha = ListProperty([0.6, 0.6, 0.6, 1])
 
     def actualizar_lista_ui(self, trabajadores: dict):
         self.ids.lista_trabajadores.clear_widgets()
@@ -806,18 +718,17 @@ class PantallaAsistencia(Screen):
             validado = info.get('validado', False)
             nombre   = info.get('nombre', f"Cred. {credencial}")
             hora     = info.get('hora_deteccion', '--:--')
-            rssi     = info.get('rssi', 0)
             if validado:
                 presentes += 1
             icono = IconLeftWidget(
-                icon="check-circle" if validado else "bluetooth",
+                icon="check-circle" if validado else "wifi",
                 theme_text_color="Custom",
                 icon_color=(0.18, 0.29, 0.12, 1) if validado else (0.96, 0.65, 0.14, 1)
             )
             item = TwoLineIconListItem(
                 text=f"[b]{nombre}[/b]  |  No. {credencial}",
                 secondary_text=(
-                    f"Detectado: {hora}  |  Senal: {rssi} dBm  |  "
+                    f"Detectado: {hora}  |  "
                     f"{'VALIDADO' if validado else 'Pendiente'}"
                 ),
             )
@@ -831,7 +742,7 @@ class PantallaAsistencia(Screen):
         count = 0
         for cred in list(app.trabajadores_detectados.keys()):
             if not app.trabajadores_detectados[cred].get('validado'):
-                app.enviar_validacion_wifi(cred)
+                app.enviar_validacion(cred)
                 count += 1
         Snackbar(
             text=f"{count} trabajador(es) validados" if count
@@ -901,9 +812,7 @@ class CuadrilleroAgriCactusApp(MDApp):
     num_cuadrilla           = ""
     cuadro_trabajo          = ""
     trabajadores_detectados = {}
-    _ble_scanner            = None
-    _scan_callback          = None
-    _escaneo_activo         = False
+    _escucha_activa         = False
 
     def build(self):
         self.theme_cls.theme_style     = "Light"
@@ -927,126 +836,127 @@ class CuadrilleroAgriCactusApp(MDApp):
         self.nombre_cuadrillero = datos.get("nombre", "")
         self.root.current = 'credencial'
 
-    def test_scan(self):
-        ble_ok     = BLE_SCAN_DISPONIBLE
-        scan_ok    = self._ble_scanner is not None
-        activo     = self._escaneo_activo
-        cuadrilla  = self.num_cuadrilla
-        detectados = len(self.trabajadores_detectados)
-        msg = f"BLE:{ble_ok} Scan:{scan_ok} Act:{activo} C:{cuadrilla} Det:{detectados}"
-        Snackbar(text=msg).open()
-        print(f"[TEST CUADRILLERO] {msg}")
-
-    def iniciar_escaneo_ble(self):
-        if not BLE_SCAN_DISPONIBLE:
-            self._simular_deteccion_escritorio()
+    # ── Escuchar anuncios de trabajadores ─────────────────────────────────────
+    def iniciar_escucha_trabajadores(self):
+        """
+        Escucha broadcasts UDP de trabajadores.
+        Formato: PRESENTE:<credencial>:<cuadrilla>:<nombre>
+        """
+        if self._escucha_activa:
             return
-        try:
-            adaptador = BluetoothAdapter.getDefaultAdapter()
-            if not adaptador:
-                Snackbar(text="Dispositivo sin Bluetooth").open()
-                return
-            if not adaptador.isEnabled():
-                Snackbar(text="Activa el Bluetooth").open()
-                return
+        self._escucha_activa = True
 
-            self._ble_scanner = adaptador.getBluetoothLeScanner()
-            if not self._ble_scanner:
-                Snackbar(text="BLE Scanner no disponible").open()
-                return
+        pa = self.root.get_screen('asistencia')
+        pa.estado_escucha       = "Activo"
+        pa.color_estado_escucha = [0.18, 0.29, 0.12, 1]
 
-            self._scan_callback = _ScanCallback(self._al_detectar_ble)
-            sb = ScanSettings.Builder()
-            sb.setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-            settings = sb.build()
-
+        def _escuchar():
             try:
-                self._ble_scanner.startScan(None, settings, self._scan_callback)
-                self._escaneo_activo = True
-                pa = self.root.get_screen('asistencia')
-                pa.estado_escaneo       = "Activo"
-                pa.color_estado_escaneo = [0.18, 0.29, 0.12, 1]
-                Snackbar(text="Escaneo BLE iniciado OK").open()
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+                    sock.bind(('', PUERTO_ANUNCIO))
+                    sock.settimeout(2.0)
+                    print(f"[WIFI] Escuchando trabajadores en puerto {PUERTO_ANUNCIO}")
+
+                    while self._escucha_activa:
+                        try:
+                            datos_raw, addr = sock.recvfrom(1024)
+                            mensaje = datos_raw.decode('utf-8').strip()
+                            partes  = mensaje.split(':')
+
+                            if len(partes) >= 4 and partes[0] == 'PRESENTE':
+                                credencial = partes[1]
+                                cuadrilla  = partes[2]
+                                nombre     = ':'.join(partes[3:])
+
+                                # Solo trabajadores de NUESTRA cuadrilla
+                                if cuadrilla != str(self.num_cuadrilla):
+                                    continue
+
+                                ahora = datetime.datetime.now().strftime("%H:%M:%S")
+                                ip    = addr[0]
+
+                                if credencial not in self.trabajadores_detectados:
+                                    self.trabajadores_detectados[credencial] = {
+                                        "nombre":         nombre,
+                                        "hora_deteccion": ahora,
+                                        "validado":       False,
+                                        "ip":             ip
+                                    }
+                                    print(f"[WIFI] Nuevo: {nombre} ({credencial})")
+                                else:
+                                    # Actualizar IP y hora
+                                    self.trabajadores_detectados[credencial]["ip"]   = ip
+                                    self.trabajadores_detectados[credencial]["nombre"] = nombre
+
+                                Clock.schedule_once(
+                                    lambda dt: self._actualizar_ui(), 0
+                                )
+
+                        except socket.timeout:
+                            continue
+                        except Exception as e:
+                            print(f"[WIFI] Error escucha: {e}")
+
             except Exception as e:
-                Snackbar(text=f"startScan fallo: {e}").open()
-                print(f"[BLE] startScan error: {e}")
+                print(f"[WIFI] Error servidor: {e}")
+            finally:
+                self._escucha_activa = False
 
-        except Exception as e:
-            print(f"[BLE SCAN] Error: {e}")
-            Snackbar(text=f"Error BLE: {e}").open()
-
-    def detener_escaneo_ble(self):
-        if BLE_SCAN_DISPONIBLE and self._ble_scanner and self._scan_callback:
-            try:
-                self._ble_scanner.stopScan(self._scan_callback)
-                self._escaneo_activo = False
-            except Exception as e:
-                print(f"[BLE SCAN] Error al detener: {e}")
-
-    def _al_detectar_ble(self, uuid_str, rssi):
-        if not uuid_str or not uuid_str.startswith(UUID_PREFIX):
-            return
-        try:
-            sufijo              = uuid_str.replace(UUID_PREFIX, "")
-            cuadrilla_detectada = str(int(sufijo[:3]))
-            credencial          = str(int(sufijo[3:]))
-        except Exception:
-            return
-        if cuadrilla_detectada != str(self.num_cuadrilla):
-            return
-        ahora = datetime.datetime.now().strftime("%H:%M:%S")
-        if credencial not in self.trabajadores_detectados:
-            self.trabajadores_detectados[credencial] = {
-                "nombre":         f"Trabajador {credencial}",
-                "hora_deteccion": ahora,
-                "rssi":           rssi,
-                "validado":       False,
-                "ip":             None
-            }
-        else:
-            self.trabajadores_detectados[credencial]["rssi"] = rssi
-        self._actualizar_ui()
+        threading.Thread(target=_escuchar, daemon=True).start()
 
     def _actualizar_ui(self):
         pa = self.root.get_screen('asistencia')
         if self.root.current == 'asistencia':
             pa.actualizar_lista_ui(self.trabajadores_detectados)
 
-    def enviar_validacion_wifi(self, credencial):
+    # ── Enviar validacion al trabajador ───────────────────────────────────────
+    def enviar_validacion(self, credencial):
+        """
+        Envía validacion UDP directamente a la IP del trabajador.
+        Formato: VALIDAR:<credencial>:<cuadrilla>:<fecha>
+        """
+        info = self.trabajadores_detectados.get(credencial, {})
+        ip   = info.get('ip')
+        if not ip:
+            Snackbar(text=f"IP desconocida para cred. {credencial}").open()
+            return
+
         fecha   = datetime.datetime.now().strftime("%Y-%m-%d")
         mensaje = f"VALIDAR:{credencial}:{self.num_cuadrilla}:{fecha}"
 
         def _enviar():
             try:
                 with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
                     sock.settimeout(3.0)
-                    sock.sendto(mensaje.encode('utf-8'), ('255.255.255.255', PUERTO_WIFI))
+                    sock.sendto(mensaje.encode('utf-8'), (ip, PUERTO_VALIDACION))
                     try:
-                        resp_raw, addr = sock.recvfrom(256)
+                        resp_raw, _ = sock.recvfrom(256)
                         resp = resp_raw.decode('utf-8').strip()
                         if resp.startswith(f"OK:{credencial}"):
                             Clock.schedule_once(
-                                lambda dt: self._confirmar_validacion(credencial, addr[0]), 0
+                                lambda dt: self._confirmar_validacion(credencial), 0
                             )
                     except socket.timeout:
+                        # Sin respuesta, marcar igual
                         Clock.schedule_once(
-                            lambda dt: self._confirmar_validacion(credencial, None), 0
+                            lambda dt: self._confirmar_validacion(credencial), 0
                         )
             except Exception as e:
-                print(f"[WIFI] Error enviando: {e}")
+                print(f"[WIFI] Error validacion: {e}")
 
         threading.Thread(target=_enviar, daemon=True).start()
 
-    def _confirmar_validacion(self, credencial, ip):
+    def _confirmar_validacion(self, credencial):
         if credencial in self.trabajadores_detectados:
             self.trabajadores_detectados[credencial]['validado']        = True
             self.trabajadores_detectados[credencial]['hora_validacion'] = \
                 datetime.datetime.now().strftime("%H:%M:%S")
-            if ip:
-                self.trabajadores_detectados[credencial]['ip'] = ip
         self._actualizar_ui()
+        Snackbar(text=f"Trabajador {credencial} validado").open()
 
+    # ── Responder al apuntador ────────────────────────────────────────────────
     def iniciar_respuesta_apuntador(self):
         def _escuchar():
             try:
@@ -1066,7 +976,7 @@ class CuadrilleroAgriCactusApp(MDApp):
                         except socket.timeout:
                             continue
                         except Exception as e:
-                            print(f"[WIFI] Error escucha apuntador: {e}")
+                            print(f"[WIFI] Error apuntador: {e}")
             except Exception as e:
                 print(f"[WIFI] Error servidor apuntador: {e}")
 
@@ -1088,32 +998,8 @@ class CuadrilleroAgriCactusApp(MDApp):
         except Exception as e:
             print(f"[WIFI] Error enviando lista: {e}")
 
-    def _simular_deteccion_escritorio(self):
-        pa = self.root.get_screen('asistencia')
-        pa.estado_escaneo       = "Simulado"
-        pa.color_estado_escaneo = [0.96, 0.65, 0.14, 1]
-
-        def _agregar_demo(dt):
-            demos = [
-                ("1001", "GARCIA LOPEZ JUAN"),
-                ("1002", "MARTINEZ RUIZ PEDRO"),
-                ("1003", "HERNANDEZ SOTO ANA"),
-            ]
-            for cred, nombre in demos:
-                if cred not in self.trabajadores_detectados:
-                    self.trabajadores_detectados[cred] = {
-                        "nombre":         nombre,
-                        "hora_deteccion": datetime.datetime.now().strftime("%H:%M:%S"),
-                        "rssi":           -65,
-                        "validado":       False,
-                        "ip":             None
-                    }
-            self._actualizar_ui()
-
-        Clock.schedule_once(_agregar_demo, 2.0)
-
     def on_stop(self):
-        self.detener_escaneo_ble()
+        self._escucha_activa = False
 
 
 if __name__ == '__main__':
