@@ -1,6 +1,6 @@
 # =============================================================================
 #  AgriCactus - App del CUADRILLERO  (main.py)
-#  v3.0 - WiFi UDP puro, sin BLE
+#  v3.1 - Cuadro+Actividad separados + buscador actividades + señal apuntador
 # =============================================================================
 
 import datetime
@@ -11,32 +11,114 @@ import threading
 
 from kivy.lang import Builder
 from kivy.clock import Clock
-from kivy.properties import StringProperty, BooleanProperty, ListProperty
+from kivy.properties import StringProperty, BooleanProperty, ListProperty, ObjectProperty
 from kivy.uix.screenmanager import Screen, FadeTransition
 from kivy.utils import platform
 from kivymd.app import MDApp
 from kivymd.uix.snackbar import Snackbar
-from kivymd.uix.list import TwoLineIconListItem, IconLeftWidget
+from kivymd.uix.list import TwoLineIconListItem, IconLeftWidget, OneLineListItem
 
-try:
-    from plyer import gps, filechooser
-    GPS_DISPONIBLE = True
-except Exception:
-    GPS_DISPONIBLE = False
+# =============================================================================
+#  CATALOGO DE ACTIVIDADES
+# =============================================================================
+ACTIVIDADES = [
+    ("1000","APOYO CAMPO AGUA"),("1001","APOYO CAMPO BAÑOS"),
+    ("1002","APOYO CAMPO BASURA"),("1003","APOYO CAMPO RANCHO"),
+    ("1004","APOYO CAMPO TALLER"),("1005","APOYO CAMPO ASISTENCIA"),
+    ("1006","APOYO CAMPO LIMPIEZA"),("1007","APOYO CAMPO LIMPIEZA GUARDERIA"),
+    ("1008","PIPA"),("1009","TRANSPORTE PERSONAL"),("1010","TROQUE/CAMION"),
+    ("1011","BATANGA AGUA"),("1012","BATANGA BOMBA BAÑOS"),("1013","BATANGA RESAGA"),
+    ("1014","SUBSUELO"),("1015","PREPODA"),("1016","MOLINO RANCHO"),
+    ("1017","MEZCLADORA ALIMENTO RANCHO"),("1018","SEMBRADORA"),("1019","BATANGA"),
+    ("1020","APLICADORA FOLIAR"),("1021","ARADO/BARVECHO"),("1022","RASTRA"),
+    ("1023","TABLON"),("1024","BORDERO CINTA Y ACOLCHADO"),("1025","ESCREPA"),
+    ("1026","APLICADORA HERBICIDA"),("1027","HAYBINE"),("1028","CORTADORA DE DISCOS"),
+    ("1029","RASTRILLO"),("1030","EMPACADORA"),("1031","MONTAGARGA CALABAZA"),
+    ("1032","APLICACION MOCHILA"),("1033","AUXILIAR DE RIEGO"),("1034","REGADOR"),
+    ("1035","SUPERVISOR DE RIEGO"),("1036","PODA DIA"),("1037","PODA ENSAYO"),
+    ("1038","CUADRILLERO"),("1039","SUPERVISOR"),("1040","SUPERVISOR GENERAL"),
+    ("1041","SUPERVISOR GENERAL 1"),("1042","SUPERVISOR RECLUTADOR 2"),
+    ("1043","SUPERVISOR RECLUTADOR 3"),("1044","SUPERVISOR RECLUTADOR 4"),
+    ("1045","SACAR PLANTAS UVA"),("1046","DESHIERBE"),("1047","QUEMANDO ALAMBRE"),
+    ("1048","APOYO CAMPO EN GENERAL"),("1049","LOMBRICARIO"),
+    ("1050","CORTINA APLICACION"),("1051","PREPARADOR DE MEZCLA"),
+    ("1052","AUXILIAR PREPARADOR DE MEZCLAS"),("1053","CATERPILLAR"),
+    ("1054","TRITURADORA DE BROCHA"),("1055","RETROESCABADORA"),
+    ("1056","AMARRE DE PUENTES Y EXTENCIONES"),("1057","AUXILIAR OPERADOR"),
+    ("1058","OPERADOR"),("1059","EMPAQUE CALABAZA"),("1060","EMPAQUE CALABAZA 1"),
+    ("1061","LEVANTANDO CALABAZA"),("1062","MOVER CALABAZA"),
+    ("1063","LIMPIEZA DE CUADROS"),("1064","APOYO GUARDERIA"),("1065","BATANGA 1"),
+    ("1066","SERVICIO EN HACIENDA"),("1067","APOYO CAMPO ADMINISTRATIVO"),
+    ("1068","VELADOR POZO"),("1069","VELADOR EMPAQUE"),("1070","VELADOR TALLER"),
+    ("1071","VELADOR PORTERO"),("1072","GASTOS EMPAQUE CALABAZA"),("1074","TAXI"),
+    ("1075","JONALERO TAXI"),("1076","REFORZAR Y PARCHAR AGRIBON"),
+    ("1077","COLOCACION DE AROS"),("1078","ACARREO DE AROS Y AGRIBON"),
+    ("1079","ALIMENTANDO LOMBRICES"),("1080","PLANTACION"),
+    ("1081","INSTALACION PLASTICO Y CINTA"),("1082","PODA NOGAL SP + PLANTAS"),
+    ("1083","RECEPCION FUNDACION"),("1084","COLOCACION DE AGRIBON"),
+    ("1085","ENTRENE"),("1086","MONTACARGUISTA"),
+    ("1087","MANTENIMIENTO DE EMPARRADO"),("1088","MARCACION PLANTACION"),
+    ("1089","APLICACION MOCHOMO TOPOS"),("1090","DESBROTE"),("1091","MATEADO"),
+    ("1092","ACOMODO DE GUIA"),("1093","ATOMIZANDO"),("1094","DESCOLE"),
+    ("1095","SELECCION DE RACIMOS"),("1096","DESHOJE"),("1097","ANILLADA"),
+    ("1098","DESPUNTE DE RACIMOS"),("1099","MONTACARGUISTA SANDIA"),
+    ("1100","ETIQUETADOR SANDIA"),("1101","TARIMERO"),
+    ("1102","LIMPIEZA EMPAQUE SANDIA"),("1103","APOYO EMPAQUE SANDIA"),
+    ("1104","APUNTADOR COSECHA SANDIA"),("1105","GASTOS EMPAQUE SANDIA"),
+    ("1106","TROQUE ACARREO DE SANDIA"),("1107","AUXILIAR ETIQUETADOR"),
+    ("1108","BAÑERAS"),("1109","SELECCION Y DESPUNTE DE RACIMOS"),
+    ("1110","TAPADO DE RACIMOS"),("1111","APOYO CAMPO RANCHO 1"),
+    ("1112","RALEO POR DIA"),("1113","ARREGLO DE RACIMOS"),
+    ("1114","ETIQUETADOR UVA"),("1115","CARGADOR UVA"),
+    ("1116","AUXILIAR CARGADOR UVA"),("1117","APOYO INOCUIDAD"),
+    ("1118","APOYO EMPAQUE UVA"),("1119","APOYO LIMPIEZA EMPAQUE UVA"),
+    ("1120","PASERO"),("1121","SUPERVISOR UVA CAMPO"),
+    ("1122","TROQUE ACARREO UVA"),("1123","ENCARGADA DE INOCUIDAD"),
+    ("1124","CUADRILLERO TAXI"),("1125","APOYO CLINICA SALUD"),
+    ("1126","APOYO RANCHO 3"),("1127","APOYO DENTISTA"),("1128","DESCHUPONE"),
+    ("1129","INSTALACION DE EMPARRE"),("1130","DESEMPARRE"),
+    ("1131","OPERADOR DUMPER"),("1132","APOYO CAMPERO PLANTA"),
+    ("1133","CULTIVADORA"),("1134","APOYO CAMPO HERBICIDAS"),
+    ("1135","BORDERO TRIPLE"),("1136","PASERO CUADRO"),
+    ("1137","AUXILIAR MECANICO"),("1138","AUXILIAR TALLER"),
+    ("1141","CUOTA TAXI"),("1142","REGADOR SP"),("1143","OPERADOR SP"),
+    ("1144","VELADOR SP"),("1145","CUADRILLERO SP"),("1146","CUOTA TAXI SP"),
+    ("1147","LIMPIEZA GENERAL SP"),("1148","PORTERO SP"),("1149","JORNAL SP"),
+    ("1150","APOYO CAMPO GENERAL SP"),("1151","VELADOR CUADROS SP"),
+    ("1152","AUXILIAR ALMACEN"),("1153","VIGILANTE SP"),("1154","COSECHA NUEZ"),
+    ("1155","CARGADOR NUEZ SP"),("1156","OPERADOR COSECHA NUEZ SP"),
+    ("1162","COSECHA NUEZ CUBETAS SP 50S"),("1164","CONTRATO SANDIA"),
+    ("1165","CONTRATO UVA"),("1172","CORTAR CALABAZA"),
+    ("1176","RIEGO RODADO"),("1178","CONTRATO PODA"),
+    ("1180","PLANTACION"),("1182","PODA NOGAL SP"),("1183","PODA NOGAL AC"),
+    ("1240","COSECHA UVA DIARIO"),("1290","CONTRATO RALEO"),
+    ("1300","PODA NOGAL"),("1301","QUITAR PLASTICO-CINTA"),
+    ("1302","SACAR GUIA"),("1330","CONTRATO DESBROCHE"),
+    ("1389","PODA DIARIO 2023/2024"),("1391","ACARREO Y MOJADO DE PLANTA"),
+    ("1395","TAREAS PLASTICO, CINTA Y AROS"),("1398","CORTA GUIAS"),
+    ("1399","BORDERO INVERTIDO"),("1421","CONTEO DE RACIMOS"),
+    ("1442","ARREGLO DE RACIMOS 1/4"),("1446","DESHIERBE"),
+    ("1449","CONTAR PLANTAS"),("1456","PODA DIA 2024-2025"),
+    ("1458","AMARRE DE PUENTES Y EXTENSIONES 2024"),("1462","POLINIZADOR"),
+    ("1499","DESGALLE"),("1500","EMPAQUE GENERAL BICENTENARIO"),
+    ("1503","DESHOJE 2 TARDEADA"),("1504","ACOMODO DE GUIA 2 TARDEADA"),
+    ("1507","CALIDAD EMPAQUE"),("1508","ARMADO DE CAJA UVA"),
+    ("1541","DESCABEZADO DE PLANTAS"),("1542","ENCARGADA DE LABORATORIO"),
+]
 
 # =============================================================================
 #  CONSTANTES
 # =============================================================================
 ARCHIVO_DATOS      = "cuadrillero_data.json"
 ARCHIVO_LISTA      = "lista_asistencia.json"
-PUERTO_ANUNCIO     = 45678   # Escucha anuncios de trabajadores
-PUERTO_VALIDACION  = 45679   # Envia validaciones a trabajadores
-PUERTO_CUADRILLERO = 45680   # Escucha peticiones del apuntador
-PUERTO_RECEPCION   = 45681   # Apuntador recibe lista
+PUERTO_ANUNCIO     = 45678
+PUERTO_VALIDACION  = 45679
+PUERTO_CUADRILLERO = 45680
+PUERTO_RECEPCION   = 45681
+PUERTO_ANUNCIO_CU  = 45682   # Cuadrillero -> Apuntador (anuncio presencia)
+INTERVALO_ANUNCIO  = 30      # segundos entre anuncios al apuntador
 
-# =============================================================================
-#  PERSISTENCIA
-# =============================================================================
+
 def guardar_datos(datos: dict):
     try:
         with open(ARCHIVO_DATOS, 'w', encoding='utf-8') as f:
@@ -70,6 +152,7 @@ ScreenManager:
     PantallaRegistro:
     PantallaCredencial:
     PantallaAsistencia:
+    PantallaBuscadorActividad:
     PantallaResumen:
 
 
@@ -366,13 +449,27 @@ ScreenManager:
             pos_hint: {'x': 0, 'top': 0.87}
             md_bg_color: 0.96, 0.65, 0.14, 1
 
-        MDTextField:
-            id: input_cuadro
-            hint_text: "Cuadro / Lote de trabajo"
-            line_color_focus: 0.18, 0.29, 0.12, 1
-            pos_hint: {'center_x': 0.5, 'top': 0.86}
+        MDBoxLayout:
+            orientation: 'horizontal'
             size_hint: (0.96, None)
             height: '48dp'
+            pos_hint: {'center_x': 0.5, 'top': 0.86}
+            spacing: '8dp'
+
+            MDTextField:
+                id: input_cuadro
+                hint_text: "Cuadro / Lote"
+                line_color_focus: 0.18, 0.29, 0.12, 1
+                size_hint_x: 0.4
+
+            MDRectangleFlatButton:
+                id: btn_actividad
+                text: root.actividad_seleccionada
+                theme_text_color: "Custom"
+                text_color: 0.18, 0.29, 0.12, 1
+                line_color: 0.18, 0.29, 0.12, 1
+                size_hint_x: 0.6
+                on_release: app.root.current = 'buscador'
 
         MDCard:
             size_hint: (0.96, 0.10)
@@ -487,6 +584,58 @@ ScreenManager:
             on_release: app.root.current = 'credencial'
 
 
+<PantallaBuscadorActividad>:
+    name: 'buscador'
+
+    MDFloatLayout:
+        md_bg_color: 0.96, 0.96, 0.94, 1
+
+        MDFloatLayout:
+            size_hint_y: 0.13
+            pos_hint: {'x': 0, 'top': 1}
+            md_bg_color: 0.18, 0.29, 0.12, 1
+
+            MDLabel:
+                text: "SELECCIONAR ACTIVIDAD"
+                font_style: "H6"
+                bold: True
+                halign: "center"
+                theme_text_color: "Custom"
+                text_color: 0.96, 0.65, 0.14, 1
+                pos_hint: {'center_x': 0.5, 'center_y': 0.5}
+                size_hint: (1, 1)
+
+        MDBoxLayout:
+            size_hint_y: 0.005
+            pos_hint: {'x': 0, 'top': 0.87}
+            md_bg_color: 0.96, 0.65, 0.14, 1
+
+        MDTextField:
+            id: input_buscar
+            hint_text: "Buscar actividad por nombre o clave..."
+            line_color_focus: 0.18, 0.29, 0.12, 1
+            pos_hint: {'center_x': 0.5, 'top': 0.85}
+            size_hint: (0.96, None)
+            height: '48dp'
+            on_text: root.filtrar_actividades(self.text)
+
+        ScrollView:
+            size_hint: (0.96, 0.68)
+            pos_hint: {'center_x': 0.5, 'top': 0.76}
+
+            MDList:
+                id: lista_actividades
+
+        MDRectangleFlatButton:
+            text: "CANCELAR"
+            theme_text_color: "Custom"
+            text_color: 0.72, 0.10, 0.10, 1
+            line_color: 0.72, 0.10, 0.10, 1
+            size_hint: (0.96, 0.07)
+            pos_hint: {'center_x': 0.5, 'y': 0.01}
+            on_release: app.root.current = 'asistencia'
+
+
 <PantallaResumen>:
     name: 'resumen'
 
@@ -532,7 +681,7 @@ ScreenManager:
                     theme_text_color: "Custom"
                     text_color: 0.18, 0.29, 0.12, 1
                     size_hint_y: None
-                    height: '72dp'
+                    height: '96dp'
 
                 ScrollView:
                     MDList:
@@ -609,18 +758,15 @@ class PantallaRegistro(Screen):
             self.ids.label_foto.text = f"Error guardando foto: {e}"
 
     def abrir_galeria(self):
-        if GPS_DISPONIBLE:
-            try:
-                from plyer import filechooser as fc
-                fc.open_file(
-                    title="Selecciona tu foto de perfil",
-                    filters=[("Imagenes", "*.jpg", "*.jpeg", "*.png")],
-                    on_selection=self.al_seleccionar_foto
-                )
-            except Exception as e:
-                self.ids.label_foto.text = f"Error galeria: {e}"
-        else:
-            self.ids.label_foto.text = "Galeria no disponible en escritorio"
+        try:
+            from plyer import filechooser as fc
+            fc.open_file(
+                title="Selecciona tu foto de perfil",
+                filters=[("Imagenes", "*.jpg", "*.jpeg", "*.png")],
+                on_selection=self.al_seleccionar_foto
+            )
+        except Exception as e:
+            self.ids.label_foto.text = f"Error galeria: {e}"
 
     def al_seleccionar_foto(self, seleccion):
         if seleccion:
@@ -699,17 +845,19 @@ class PantallaCredencial(Screen):
         pa.fecha_hoy     = datetime.datetime.now().strftime("%d/%m/%Y  %H:%M")
         app.iniciar_escucha_trabajadores()
         app.iniciar_respuesta_apuntador()
+        app.iniciar_anuncio_apuntador()
         app.root.current = 'asistencia'
         Snackbar(text="Escuchando trabajadores...").open()
 
 
 class PantallaAsistencia(Screen):
-    titulo_sesion       = StringProperty("Cuadrilla")
-    fecha_hoy           = StringProperty("")
-    total_presentes     = StringProperty("0")
-    total_detectados    = StringProperty("0")
-    estado_escucha      = StringProperty("Inactivo")
+    titulo_sesion        = StringProperty("Cuadrilla")
+    fecha_hoy            = StringProperty("")
+    total_presentes      = StringProperty("0")
+    total_detectados     = StringProperty("0")
+    estado_escucha       = StringProperty("Inactivo")
     color_estado_escucha = ListProperty([0.6, 0.6, 0.6, 1])
+    actividad_seleccionada = StringProperty("Seleccionar actividad...")
 
     def actualizar_lista_ui(self, trabajadores: dict):
         self.ids.lista_trabajadores.clear_widgets()
@@ -718,6 +866,7 @@ class PantallaAsistencia(Screen):
             validado = info.get('validado', False)
             nombre   = info.get('nombre', f"Cred. {credencial}")
             hora     = info.get('hora_deteccion', '--:--')
+            gps_txt  = info.get('gps', '')
             if validado:
                 presentes += 1
             icono = IconLeftWidget(
@@ -728,8 +877,8 @@ class PantallaAsistencia(Screen):
             item = TwoLineIconListItem(
                 text=f"[b]{nombre}[/b]  |  No. {credencial}",
                 secondary_text=(
-                    f"Detectado: {hora}  |  "
-                    f"{'VALIDADO' if validado else 'Pendiente'}"
+                    f"{hora}  |  {'VALIDADO' if validado else 'Pendiente'}"
+                    + (f"  |  {gps_txt}" if gps_txt else "")
                 ),
             )
             item.add_widget(icono)
@@ -750,28 +899,60 @@ class PantallaAsistencia(Screen):
         ).open()
 
     def ver_resumen(self):
-        app    = MDApp.get_running_app()
-        cuadro = self.ids.input_cuadro.text.strip().upper() or "SIN CUADRO"
-        pr     = app.root.get_screen('resumen')
+        app      = MDApp.get_running_app()
+        cuadro   = self.ids.input_cuadro.text.strip().upper() or "SIN CUADRO"
+        actividad = self.actividad_seleccionada
+        pr       = app.root.get_screen('resumen')
         pr.construir_resumen(
             app.trabajadores_detectados,
             app.nombre_cuadrillero,
             app.num_cuadrilla,
-            cuadro
+            cuadro,
+            actividad
         )
-        app.cuadro_trabajo = cuadro
-        app.root.current   = 'resumen'
+        app.cuadro_trabajo    = cuadro
+        app.actividad_trabajo = actividad
+        app.root.current      = 'resumen'
+
+
+class PantallaBuscadorActividad(Screen):
+    def on_enter(self):
+        self.ids.input_buscar.text = ""
+        self.filtrar_actividades("")
+
+    def filtrar_actividades(self, texto):
+        self.ids.lista_actividades.clear_widgets()
+        txt = texto.strip().upper()
+        resultados = [
+            (clave, desc) for clave, desc in ACTIVIDADES
+            if txt in desc.upper() or txt in clave
+        ] if txt else ACTIVIDADES[:50]
+
+        for clave, desc in resultados:
+            item = OneLineListItem(
+                text=f"{clave} - {desc}",
+                on_release=lambda x, c=clave, d=desc: self._seleccionar(c, d)
+            )
+            self.ids.lista_actividades.add_widget(item)
+
+    def _seleccionar(self, clave, desc):
+        app = MDApp.get_running_app()
+        pa  = app.root.get_screen('asistencia')
+        pa.actividad_seleccionada = f"{clave} - {desc}"
+        app.actividad_trabajo     = f"{clave} - {desc}"
+        app.root.current          = 'asistencia'
 
 
 class PantallaResumen(Screen):
     resumen_texto = StringProperty("")
 
-    def construir_resumen(self, trabajadores, cuadrillero, cuadrilla, cuadro):
+    def construir_resumen(self, trabajadores, cuadrillero, cuadrilla, cuadro, actividad):
         presentes = sum(1 for v in trabajadores.values() if v.get('validado'))
         total     = len(trabajadores)
         fecha     = datetime.datetime.now().strftime("%d/%m/%Y")
         self.resumen_texto = (
             f"Cuadrilla {cuadrilla} | {cuadro}\n"
+            f"Actividad: {actividad}\n"
             f"{cuadrillero}  |  {fecha}\n"
             f"Presentes: {presentes} / {total}"
         )
@@ -801,6 +982,7 @@ class PantallaResumen(Screen):
             "cuadrillero":  app.nombre_cuadrillero,
             "cuadrilla":    app.num_cuadrilla,
             "cuadro":       app.cuadro_trabajo,
+            "actividad":    app.actividad_trabajo,
             "trabajadores": app.trabajadores_detectados
         }
         guardar_lista(datos)
@@ -811,8 +993,10 @@ class CuadrilleroAgriCactusApp(MDApp):
     nombre_cuadrillero      = ""
     num_cuadrilla           = ""
     cuadro_trabajo          = ""
+    actividad_trabajo       = ""
     trabajadores_detectados = {}
     _escucha_activa         = False
+    _anuncio_activo         = False
 
     def build(self):
         self.theme_cls.theme_style     = "Light"
@@ -836,12 +1020,7 @@ class CuadrilleroAgriCactusApp(MDApp):
         self.nombre_cuadrillero = datos.get("nombre", "")
         self.root.current = 'credencial'
 
-    # ── Escuchar anuncios de trabajadores ─────────────────────────────────────
     def iniciar_escucha_trabajadores(self):
-        """
-        Escucha broadcasts UDP de trabajadores.
-        Formato: PRESENTE:<credencial>:<cuadrilla>:<nombre>
-        """
         if self._escucha_activa:
             return
         self._escucha_activa = True
@@ -857,7 +1036,6 @@ class CuadrilleroAgriCactusApp(MDApp):
                     sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
                     sock.bind(('', PUERTO_ANUNCIO))
                     sock.settimeout(2.0)
-                    print(f"[WIFI] Escuchando trabajadores en puerto {PUERTO_ANUNCIO}")
 
                     while self._escucha_activa:
                         try:
@@ -865,34 +1043,35 @@ class CuadrilleroAgriCactusApp(MDApp):
                             mensaje = datos_raw.decode('utf-8').strip()
                             partes  = mensaje.split(':')
 
+                            # Formato: PRESENTE:<cred>:<cuadrilla>:<nombre>:<lat>:<lon>
                             if len(partes) >= 4 and partes[0] == 'PRESENTE':
                                 credencial = partes[1]
                                 cuadrilla  = partes[2]
-                                nombre     = ':'.join(partes[3:])
+                                nombre     = partes[3]
+                                lat        = partes[4] if len(partes) > 4 else "0"
+                                lon        = partes[5] if len(partes) > 5 else "0"
 
-                                # Solo trabajadores de NUESTRA cuadrilla
                                 if cuadrilla != str(self.num_cuadrilla):
                                     continue
 
-                                ahora = datetime.datetime.now().strftime("%H:%M:%S")
-                                ip    = addr[0]
+                                ahora  = datetime.datetime.now().strftime("%H:%M:%S")
+                                ip     = addr[0]
+                                gps_txt = f"{lat},{lon}" if lat != "0" else ""
 
                                 if credencial not in self.trabajadores_detectados:
                                     self.trabajadores_detectados[credencial] = {
                                         "nombre":         nombre,
                                         "hora_deteccion": ahora,
                                         "validado":       False,
-                                        "ip":             ip
+                                        "ip":             ip,
+                                        "gps":            gps_txt
                                     }
-                                    print(f"[WIFI] Nuevo: {nombre} ({credencial})")
                                 else:
-                                    # Actualizar IP y hora
-                                    self.trabajadores_detectados[credencial]["ip"]   = ip
+                                    self.trabajadores_detectados[credencial]["ip"]     = ip
                                     self.trabajadores_detectados[credencial]["nombre"] = nombre
+                                    self.trabajadores_detectados[credencial]["gps"]    = gps_txt
 
-                                Clock.schedule_once(
-                                    lambda dt: self._actualizar_ui(), 0
-                                )
+                                Clock.schedule_once(lambda dt: self._actualizar_ui(), 0)
 
                         except socket.timeout:
                             continue
@@ -911,16 +1090,11 @@ class CuadrilleroAgriCactusApp(MDApp):
         if self.root.current == 'asistencia':
             pa.actualizar_lista_ui(self.trabajadores_detectados)
 
-    # ── Enviar validacion al trabajador ───────────────────────────────────────
     def enviar_validacion(self, credencial):
-        """
-        Envía validacion UDP directamente a la IP del trabajador.
-        Formato: VALIDAR:<credencial>:<cuadrilla>:<fecha>
-        """
         info = self.trabajadores_detectados.get(credencial, {})
         ip   = info.get('ip')
         if not ip:
-            Snackbar(text=f"IP desconocida para cred. {credencial}").open()
+            Snackbar(text=f"Sin IP para cred. {credencial}").open()
             return
 
         fecha   = datetime.datetime.now().strftime("%Y-%m-%d")
@@ -939,7 +1113,6 @@ class CuadrilleroAgriCactusApp(MDApp):
                                 lambda dt: self._confirmar_validacion(credencial), 0
                             )
                     except socket.timeout:
-                        # Sin respuesta, marcar igual
                         Clock.schedule_once(
                             lambda dt: self._confirmar_validacion(credencial), 0
                         )
@@ -954,9 +1127,38 @@ class CuadrilleroAgriCactusApp(MDApp):
             self.trabajadores_detectados[credencial]['hora_validacion'] = \
                 datetime.datetime.now().strftime("%H:%M:%S")
         self._actualizar_ui()
-        Snackbar(text=f"Trabajador {credencial} validado").open()
+        Snackbar(text=f"Cred. {credencial} validado").open()
 
-    # ── Responder al apuntador ────────────────────────────────────────────────
+    # ── Anuncio al apuntador ──────────────────────────────────────────────────
+    def iniciar_anuncio_apuntador(self):
+        """
+        Emite broadcast cada 30s para que el apuntador detecte este cuadrillero.
+        Formato: CUADRILLERO:<cuadrilla>:<nombre>
+        """
+        if self._anuncio_activo:
+            return
+        self._anuncio_activo = True
+
+        def _anunciar():
+            import time
+            while self._anuncio_activo:
+                try:
+                    nombre_limpio = str(self.nombre_cuadrillero).replace(':', ' ').replace('\n', ' ')
+                    mensaje = f"CUADRILLERO:{self.num_cuadrilla}:{nombre_limpio}"
+                    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+                        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+                        sock.sendto(
+                            mensaje.encode('utf-8'),
+                            ('255.255.255.255', PUERTO_ANUNCIO_CU)
+                        )
+                    print(f"[WIFI] Anuncio apuntador: {mensaje}")
+                except Exception as e:
+                    print(f"[WIFI] Error anuncio apuntador: {e}")
+                time.sleep(INTERVALO_ANUNCIO)
+
+        threading.Thread(target=_anunciar, daemon=True).start()
+
+    # ── Responder al apuntador (peticion de lista) ────────────────────────────
     def iniciar_respuesta_apuntador(self):
         def _escuchar():
             try:
@@ -988,6 +1190,7 @@ class CuadrilleroAgriCactusApp(MDApp):
             "cuadrilla":    self.num_cuadrilla,
             "cuadrillero":  self.nombre_cuadrillero,
             "cuadro":       self.cuadro_trabajo,
+            "actividad":    self.actividad_trabajo,
             "fecha":        datetime.datetime.now().strftime("%Y-%m-%d"),
             "trabajadores": self.trabajadores_detectados
         }
@@ -1000,6 +1203,7 @@ class CuadrilleroAgriCactusApp(MDApp):
 
     def on_stop(self):
         self._escucha_activa = False
+        self._anuncio_activo = False
 
 
 if __name__ == '__main__':
