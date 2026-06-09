@@ -1,6 +1,6 @@
 # =============================================================================
 #  AgriCactus - App del CUADRILLERO  (main.py)
-#  v2.2 - Fix indentacion + permisos BLE Android 12+
+#  v2.3 - Fix permisos BLE por version de Android
 # =============================================================================
 
 import datetime
@@ -754,19 +754,27 @@ class PantallaCredencial(Screen):
         if platform == 'android':
             try:
                 from android.permissions import request_permissions, Permission, check_permission
+                from jnius import autoclass as _ac
+                Build = _ac('android.os.Build')
+                sdk   = Build.VERSION.SDK_INT
 
-                permisos_necesarios = [
-                    Permission.BLUETOOTH_SCAN,
-                    Permission.BLUETOOTH_CONNECT,
-                    Permission.BLUETOOTH_ADMIN,
-                    Permission.ACCESS_FINE_LOCATION,
-                    Permission.ACCESS_COARSE_LOCATION,
-                ]
+                # Android 12+ usa permisos diferentes
+                if sdk >= 31:
+                    permisos_necesarios = [
+                        Permission.BLUETOOTH_SCAN,
+                        Permission.BLUETOOTH_CONNECT,
+                        Permission.ACCESS_FINE_LOCATION,
+                    ]
+                else:
+                    permisos_necesarios = [
+                        Permission.BLUETOOTH,
+                        Permission.ACCESS_FINE_LOCATION,
+                    ]
 
                 todos_concedidos = all(
                     check_permission(p) for p in permisos_necesarios
                 )
-                Snackbar(text=f"Permisos OK: {todos_concedidos}").open()
+                Snackbar(text=f"SDK:{sdk} Permisos:{todos_concedidos}").open()
 
                 if not todos_concedidos:
                     def _on_permisos(permisos, concedidos):
@@ -954,11 +962,18 @@ class CuadrilleroAgriCactusApp(MDApp):
         try:
             if platform == 'android':
                 from android.permissions import check_permission, Permission
-                if not check_permission(Permission.BLUETOOTH_SCAN):
-                    Snackbar(text="Permiso BLUETOOTH_SCAN no concedido").open()
-                    return
+                from jnius import autoclass as _ac
+                sdk = _ac('android.os.Build').VERSION.SDK_INT
+                if sdk >= 31:
+                    if not check_permission(Permission.BLUETOOTH_SCAN):
+                        Snackbar(text="Falta permiso BLUETOOTH_SCAN").open()
+                        return
+                else:
+                    if not check_permission(Permission.BLUETOOTH):
+                        Snackbar(text="Falta permiso BLUETOOTH").open()
+                        return
                 if not check_permission(Permission.ACCESS_FINE_LOCATION):
-                    Snackbar(text="Permiso de ubicacion requerido para BLE").open()
+                    Snackbar(text="Falta permiso de ubicacion").open()
                     return
 
             adaptador = BluetoothAdapter.getDefaultAdapter()
