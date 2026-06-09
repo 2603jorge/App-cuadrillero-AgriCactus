@@ -1,6 +1,6 @@
 # =============================================================================
 #  AgriCactus - App del CUADRILLERO  (main.py)
-#  v2.3 - Fix permisos BLE por version de Android
+#  v2.4 - Test BLE diagnóstico
 # =============================================================================
 
 import datetime
@@ -477,7 +477,7 @@ ScreenManager:
                         theme_text_color: "Secondary"
 
         MDCard:
-            size_hint: (0.96, 0.48)
+            size_hint: (0.96, 0.44)
             pos_hint: {'center_x': 0.5, 'top': 0.64}
             elevation: 2
             radius: [8, 8, 8, 8]
@@ -504,13 +504,13 @@ ScreenManager:
         MDBoxLayout:
             orientation: 'horizontal'
             size_hint: (0.96, 0.08)
-            pos_hint: {'center_x': 0.5, 'y': 0.08}
-            spacing: '8dp'
+            pos_hint: {'center_x': 0.5, 'y': 0.09}
+            spacing: '6dp'
 
             MDRaisedButton:
                 text: "VALIDAR TODOS"
                 md_bg_color: 0.18, 0.29, 0.12, 1
-                size_hint_x: 0.5
+                size_hint_x: 0.34
                 elevation: 3
                 on_release: root.validar_todos()
 
@@ -518,9 +518,16 @@ ScreenManager:
                 text: "VER RESUMEN"
                 md_bg_color: 0.96, 0.65, 0.14, 1
                 text_color: 0.18, 0.29, 0.12, 1
-                size_hint_x: 0.5
+                size_hint_x: 0.33
                 elevation: 3
                 on_release: root.ver_resumen()
+
+            MDRaisedButton:
+                text: "TEST"
+                md_bg_color: 0.29, 0.40, 0.25, 1
+                size_hint_x: 0.33
+                elevation: 3
+                on_release: app.test_scan()
 
         MDRectangleFlatButton:
             text: "MI CREDENCIAL"
@@ -619,21 +626,17 @@ class PantallaRegistro(Screen):
                 from android.permissions import request_permissions, Permission
                 from android import activity as android_activity
                 from jnius import autoclass
-
                 request_permissions([
                     Permission.CAMERA,
                     Permission.WRITE_EXTERNAL_STORAGE,
                     Permission.READ_EXTERNAL_STORAGE
                 ])
-
                 Intent         = autoclass('android.content.Intent')
                 MediaStore     = autoclass('android.provider.MediaStore')
                 PythonActivity = autoclass('org.kivy.android.PythonActivity')
-
                 intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
                 PythonActivity.mActivity.startActivityForResult(intent, 1001)
                 android_activity.bind(on_activity_result=self._resultado_camara)
-
             except Exception as e:
                 self.ids.label_foto.text = f"Error camara: {e}"
         else:
@@ -649,19 +652,15 @@ class PantallaRegistro(Screen):
             PythonActivity       = autoclass('org.kivy.android.PythonActivity')
             FileOutputStream     = autoclass('java.io.FileOutputStream')
             BitmapCompressFormat = autoclass('android.graphics.Bitmap$CompressFormat')
-
             extras    = intent.getExtras()
             bitmap    = extras.get("data")
             files_dir = PythonActivity.mActivity.getFilesDir().getAbsolutePath()
             ruta      = f"{files_dir}/cuadrillero_foto.jpg"
-
             fos = FileOutputStream(ruta)
             bitmap.compress(BitmapCompressFormat.JPEG, 90, fos)
             fos.close()
-
             self.ruta_foto_seleccionada = ruta
             self.ids.label_foto.text    = "Foto tomada correctamente"
-
         except Exception as e:
             self.ids.label_foto.text = f"Error guardando foto: {e}"
 
@@ -758,7 +757,6 @@ class PantallaCredencial(Screen):
                 Build = _ac('android.os.Build')
                 sdk   = Build.VERSION.SDK_INT
 
-                # Android 12+ usa permisos diferentes
                 if sdk >= 31:
                     permisos_necesarios = [
                         Permission.BLUETOOTH_SCAN,
@@ -786,7 +784,6 @@ class PantallaCredencial(Screen):
                             Snackbar(
                                 text="Acepta TODOS los permisos e intenta de nuevo"
                             ).open()
-
                     request_permissions(permisos_necesarios, _on_permisos)
                     return
 
@@ -818,7 +815,6 @@ class PantallaAsistencia(Screen):
     def actualizar_lista_ui(self, trabajadores: dict):
         self.ids.lista_trabajadores.clear_widgets()
         presentes = 0
-
         for credencial, info in trabajadores.items():
             validado = info.get('validado', False)
             nombre   = info.get('nombre', f"Cred. {credencial}")
@@ -826,7 +822,6 @@ class PantallaAsistencia(Screen):
             rssi     = info.get('rssi', 0)
             if validado:
                 presentes += 1
-
             icono = IconLeftWidget(
                 icon="check-circle" if validado else "bluetooth",
                 theme_text_color="Custom",
@@ -841,7 +836,6 @@ class PantallaAsistencia(Screen):
             )
             item.add_widget(icono)
             self.ids.lista_trabajadores.add_widget(item)
-
         self.total_presentes  = str(presentes)
         self.total_detectados = str(len(trabajadores))
 
@@ -878,13 +872,11 @@ class PantallaResumen(Screen):
         presentes = sum(1 for v in trabajadores.values() if v.get('validado'))
         total     = len(trabajadores)
         fecha     = datetime.datetime.now().strftime("%d/%m/%Y")
-
         self.resumen_texto = (
             f"Cuadrilla {cuadrilla} | {cuadro}\n"
             f"{cuadrillero}  |  {fecha}\n"
             f"Presentes: {presentes} / {total}"
         )
-
         self.ids.lista_resumen.clear_widgets()
         for cred, info in trabajadores.items():
             validado = info.get('validado', False)
@@ -941,7 +933,6 @@ class CuadrilleroAgriCactusApp(MDApp):
         datos = cargar_datos()
         if not datos:
             return
-
         pc = self.root.get_screen('credencial')
         pc.nombre_cuadrillero = datos.get("nombre", "")
         pc.nss                = datos.get("nss", "")
@@ -949,11 +940,19 @@ class CuadrilleroAgriCactusApp(MDApp):
         pc.num_cuadrilla      = datos.get("cuadrilla", "")
         pc.ruta_foto          = datos.get("foto", "")
         pc.fecha_ingreso      = datos.get("fecha_ingreso", "")
-
         self.num_cuadrilla      = datos.get("cuadrilla", "")
         self.nombre_cuadrillero = datos.get("nombre", "")
-
         self.root.current = 'credencial'
+
+    def test_scan(self):
+        ble_ok     = BLE_SCAN_DISPONIBLE
+        scan_ok    = self._ble_scanner is not None
+        activo     = self._escaneo_activo
+        cuadrilla  = self.num_cuadrilla
+        detectados = len(self.trabajadores_detectados)
+        msg = f"BLE:{ble_ok} Scan:{scan_ok} Act:{activo} C:{cuadrilla} Det:{detectados}"
+        Snackbar(text=msg).open()
+        print(f"[TEST CUADRILLERO] {msg}")
 
     def iniciar_escaneo_ble(self):
         if not BLE_SCAN_DISPONIBLE:
