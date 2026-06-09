@@ -1,6 +1,6 @@
 # =============================================================================
 #  AgriCactus - App del CUADRILLERO  (main.py)
-#  v2.6 - Fix indentacion iniciar_escaneo_ble
+#  v2.7 - Sin verificacion de permisos en iniciar_escaneo_ble
 # =============================================================================
 
 import datetime
@@ -942,22 +942,6 @@ class CuadrilleroAgriCactusApp(MDApp):
             self._simular_deteccion_escritorio()
             return
         try:
-            if platform == 'android':
-                from android.permissions import check_permission, Permission
-                from jnius import autoclass as _ac
-                sdk = _ac('android.os.Build$VERSION').SDK_INT
-                if sdk >= 31:
-                    if not check_permission(Permission.BLUETOOTH_SCAN):
-                        Snackbar(text="Falta permiso BLUETOOTH_SCAN").open()
-                        return
-                else:
-                    if not check_permission(Permission.BLUETOOTH):
-                        Snackbar(text="Falta permiso BLUETOOTH").open()
-                        return
-                if not check_permission(Permission.ACCESS_FINE_LOCATION):
-                    Snackbar(text="Falta permiso de ubicacion").open()
-                    return
-
             adaptador = BluetoothAdapter.getDefaultAdapter()
             if not adaptador:
                 Snackbar(text="Dispositivo sin Bluetooth").open()
