@@ -1,6 +1,6 @@
 # =============================================================================
 #  AgriCactus - App del CUADRILLERO  (main.py)
-#  v2.1 - Fix permisos BLE Android 12+
+#  v2.2 - Fix indentacion + permisos BLE Android 12+
 # =============================================================================
 
 import datetime
@@ -751,51 +751,52 @@ class PantallaCredencial(Screen):
     ruta_foto          = StringProperty("")
 
     def ir_a_asistencia(self):
-    if platform == 'android':
-        try:
-            from android.permissions import request_permissions, Permission, check_permission
+        if platform == 'android':
+            try:
+                from android.permissions import request_permissions, Permission, check_permission
 
-            permisos_necesarios = [
-                Permission.BLUETOOTH_SCAN,
-                Permission.BLUETOOTH_CONNECT,
-                Permission.BLUETOOTH_ADMIN,
-                Permission.ACCESS_FINE_LOCATION,
-                Permission.ACCESS_COARSE_LOCATION,
-            ]
+                permisos_necesarios = [
+                    Permission.BLUETOOTH_SCAN,
+                    Permission.BLUETOOTH_CONNECT,
+                    Permission.BLUETOOTH_ADMIN,
+                    Permission.ACCESS_FINE_LOCATION,
+                    Permission.ACCESS_COARSE_LOCATION,
+                ]
 
-            # Mostrar estado actual de permisos
-            estados = {p.split('.')[-1]: check_permission(p) for p in permisos_necesarios}
-            print(f"[PERMISOS] Estado: {estados}")
+                todos_concedidos = all(
+                    check_permission(p) for p in permisos_necesarios
+                )
+                Snackbar(text=f"Permisos OK: {todos_concedidos}").open()
 
-            todos_concedidos = all(check_permission(p) for p in permisos_necesarios)
-            Snackbar(text=f"Permisos OK: {todos_concedidos}").open()
+                if not todos_concedidos:
+                    def _on_permisos(permisos, concedidos):
+                        if all(concedidos):
+                            Clock.schedule_once(
+                                lambda dt: self._continuar_a_asistencia(), 0.5
+                            )
+                        else:
+                            Snackbar(
+                                text="Acepta TODOS los permisos e intenta de nuevo"
+                            ).open()
 
-            if not todos_concedidos:
-                def _on_permisos(permisos, concedidos):
-                    print(f"[PERMISOS] Resultado: {list(zip(permisos, concedidos))}")
-                    if all(concedidos):
-                        Clock.schedule_once(lambda dt: self._continuar_a_asistencia(), 0.5)
-                    else:
-                        Snackbar(text="Acepta TODOS los permisos e intenta de nuevo").open()
+                    request_permissions(permisos_necesarios, _on_permisos)
+                    return
 
-                request_permissions(permisos_necesarios, _on_permisos)
-                return
+            except Exception as e:
+                Snackbar(text=f"Error permisos: {e}").open()
+                print(f"[PERMISOS] Error: {e}")
 
-        except Exception as e:
-            Snackbar(text=f"Error permisos: {e}").open()
-            print(f"[PERMISOS] Error: {e}")
+        self._continuar_a_asistencia()
 
-    self._continuar_a_asistencia()
-
-def _continuar_a_asistencia(self):
-    Snackbar(text="Iniciando jornada...").open()
-    app = MDApp.get_running_app()
-    pa  = app.root.get_screen('asistencia')
-    pa.titulo_sesion = f"Cuadrilla {self.num_cuadrilla}"
-    pa.fecha_hoy     = datetime.datetime.now().strftime("%d/%m/%Y  %H:%M")
-    app.iniciar_escaneo_ble()
-    app.iniciar_respuesta_apuntador()
-    app.root.current = 'asistencia'
+    def _continuar_a_asistencia(self):
+        Snackbar(text="Iniciando jornada...").open()
+        app = MDApp.get_running_app()
+        pa  = app.root.get_screen('asistencia')
+        pa.titulo_sesion = f"Cuadrilla {self.num_cuadrilla}"
+        pa.fecha_hoy     = datetime.datetime.now().strftime("%d/%m/%Y  %H:%M")
+        app.iniciar_escaneo_ble()
+        app.iniciar_respuesta_apuntador()
+        app.root.current = 'asistencia'
 
 
 class PantallaAsistencia(Screen):
@@ -946,7 +947,6 @@ class CuadrilleroAgriCactusApp(MDApp):
 
         self.root.current = 'credencial'
 
-    # ── Escaneo BLE ───────────────────────────────────────────────────────────
     def iniciar_escaneo_ble(self):
         if not BLE_SCAN_DISPONIBLE:
             self._simular_deteccion_escritorio()
@@ -955,7 +955,7 @@ class CuadrilleroAgriCactusApp(MDApp):
             if platform == 'android':
                 from android.permissions import check_permission, Permission
                 if not check_permission(Permission.BLUETOOTH_SCAN):
-                    Snackbar(text="Permiso Bluetooth_Scan no concedido").open()
+                    Snackbar(text="Permiso BLUETOOTH_SCAN no concedido").open()
                     return
                 if not check_permission(Permission.ACCESS_FINE_LOCATION):
                     Snackbar(text="Permiso de ubicacion requerido para BLE").open()
@@ -1031,7 +1031,6 @@ class CuadrilleroAgriCactusApp(MDApp):
         if self.root.current == 'asistencia':
             pa.actualizar_lista_ui(self.trabajadores_detectados)
 
-    # ── Validacion WiFi UDP ───────────────────────────────────────────────────
     def enviar_validacion_wifi(self, credencial):
         fecha   = datetime.datetime.now().strftime("%Y-%m-%d")
         mensaje = f"VALIDAR:{credencial}:{self.num_cuadrilla}:{fecha}"
@@ -1067,7 +1066,6 @@ class CuadrilleroAgriCactusApp(MDApp):
                 self.trabajadores_detectados[credencial]['ip'] = ip
         self._actualizar_ui()
 
-    # ── Responder al apuntador ────────────────────────────────────────────────
     def iniciar_respuesta_apuntador(self):
         def _escuchar():
             try:
@@ -1109,7 +1107,6 @@ class CuadrilleroAgriCactusApp(MDApp):
         except Exception as e:
             print(f"[WIFI] Error enviando lista: {e}")
 
-    # ── Simulacion escritorio ─────────────────────────────────────────────────
     def _simular_deteccion_escritorio(self):
         pa = self.root.get_screen('asistencia')
         pa.estado_escaneo       = "Simulado"
