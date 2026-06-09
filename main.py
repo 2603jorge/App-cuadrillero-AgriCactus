@@ -1,6 +1,6 @@
 # =============================================================================
 #  AgriCactus - App del CUADRILLERO  (main.py)
-#  v2.5 - Fix Build$VERSION
+#  v2.6 - Fix indentacion iniciar_escaneo_ble
 # =============================================================================
 
 import datetime
@@ -18,14 +18,12 @@ from kivymd.app import MDApp
 from kivymd.uix.snackbar import Snackbar
 from kivymd.uix.list import TwoLineIconListItem, IconLeftWidget
 
-# --- GPS (plyer) ---
 try:
     from plyer import gps, filechooser
     GPS_DISPONIBLE = True
 except Exception:
     GPS_DISPONIBLE = False
 
-# --- BLE nativo Android ---
 if platform == 'android':
     try:
         from jnius import autoclass, PythonJavaClass, java_method
@@ -67,9 +65,6 @@ if platform == 'android':
 else:
     BLE_SCAN_DISPONIBLE = False
 
-# =============================================================================
-#  CONSTANTES
-# =============================================================================
 ARCHIVO_DATOS      = "cuadrillero_data.json"
 ARCHIVO_LISTA      = "lista_asistencia.json"
 PUERTO_WIFI        = 45678
@@ -77,15 +72,14 @@ PUERTO_CUADRILLERO = 45679
 PUERTO_RECEPCION   = 45680
 UUID_PREFIX        = "0000ac10-0000-1000-8000-"
 
-# =============================================================================
-#  PERSISTENCIA
-# =============================================================================
+
 def guardar_datos(datos: dict):
     try:
         with open(ARCHIVO_DATOS, 'w', encoding='utf-8') as f:
             json.dump(datos, f, ensure_ascii=False, indent=2)
     except Exception as e:
         print(f"[STORAGE] Error: {e}")
+
 
 def cargar_datos() -> dict:
     if os.path.exists(ARCHIVO_DATOS):
@@ -96,6 +90,7 @@ def cargar_datos() -> dict:
             pass
     return {}
 
+
 def guardar_lista(datos: dict):
     try:
         with open(ARCHIVO_LISTA, 'w', encoding='utf-8') as f:
@@ -103,9 +98,7 @@ def guardar_lista(datos: dict):
     except Exception as e:
         print(f"[STORAGE] Error lista: {e}")
 
-# =============================================================================
-#  INTERFAZ KV
-# =============================================================================
+
 KV = '''
 #:import FadeTransition kivy.uix.screenmanager.FadeTransition
 #:import FitImage kivymd.uix.fitimage.FitImage
@@ -613,9 +606,6 @@ ScreenManager:
 '''
 
 
-# =============================================================================
-#  CLASES DE PANTALLA
-# =============================================================================
 class PantallaRegistro(Screen):
     ruta_foto_seleccionada = ""
     _ruta_foto_camara      = ""
@@ -753,7 +743,6 @@ class PantallaCredencial(Screen):
             try:
                 from android.permissions import request_permissions, Permission, check_permission
                 from jnius import autoclass as _ac
-                # ✅ Fix: Build$VERSION en lugar de Build.VERSION
                 BuildVersion = _ac('android.os.Build$VERSION')
                 sdk = BuildVersion.SDK_INT
 
@@ -907,18 +896,14 @@ class PantallaResumen(Screen):
         Snackbar(text="Lista guardada correctamente").open()
 
 
-# =============================================================================
-#  APLICACION PRINCIPAL
-# =============================================================================
 class CuadrilleroAgriCactusApp(MDApp):
     nombre_cuadrillero      = ""
     num_cuadrilla           = ""
     cuadro_trabajo          = ""
     trabajadores_detectados = {}
-
-    _ble_scanner    = None
-    _scan_callback  = None
-    _escaneo_activo = False
+    _ble_scanner            = None
+    _scan_callback          = None
+    _escaneo_activo         = False
 
     def build(self):
         self.theme_cls.theme_style     = "Light"
@@ -952,7 +937,7 @@ class CuadrilleroAgriCactusApp(MDApp):
         Snackbar(text=msg).open()
         print(f"[TEST CUADRILLERO] {msg}")
 
-   def iniciar_escaneo_ble(self):
+    def iniciar_escaneo_ble(self):
         if not BLE_SCAN_DISPONIBLE:
             self._simular_deteccion_escritorio()
             return
