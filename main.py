@@ -751,47 +751,51 @@ class PantallaCredencial(Screen):
     ruta_foto          = StringProperty("")
 
     def ir_a_asistencia(self):
-        if platform == 'android':
-            try:
-                from android.permissions import request_permissions, Permission, check_permission
+    if platform == 'android':
+        try:
+            from android.permissions import request_permissions, Permission, check_permission
 
-                permisos_necesarios = [
-                    Permission.BLUETOOTH_SCAN,
-                    Permission.BLUETOOTH_CONNECT,
-                    Permission.BLUETOOTH_ADMIN,
-                    Permission.ACCESS_FINE_LOCATION,
-                    Permission.ACCESS_COARSE_LOCATION,
-                ]
+            permisos_necesarios = [
+                Permission.BLUETOOTH_SCAN,
+                Permission.BLUETOOTH_CONNECT,
+                Permission.BLUETOOTH_ADMIN,
+                Permission.ACCESS_FINE_LOCATION,
+                Permission.ACCESS_COARSE_LOCATION,
+            ]
 
-                todos_concedidos = all(
-                    check_permission(p) for p in permisos_necesarios
-                )
+            # Mostrar estado actual de permisos
+            estados = {p.split('.')[-1]: check_permission(p) for p in permisos_necesarios}
+            print(f"[PERMISOS] Estado: {estados}")
 
-                if not todos_concedidos:
-                    def _on_permisos(permisos, concedidos):
-                        if all(concedidos):
-                            self._continuar_a_asistencia()
-                        else:
-                            Snackbar(
-                                text="Se necesitan permisos de Bluetooth y Ubicacion"
-                            ).open()
+            todos_concedidos = all(check_permission(p) for p in permisos_necesarios)
+            Snackbar(text=f"Permisos OK: {todos_concedidos}").open()
 
-                    request_permissions(permisos_necesarios, _on_permisos)
-                    return
+            if not todos_concedidos:
+                def _on_permisos(permisos, concedidos):
+                    print(f"[PERMISOS] Resultado: {list(zip(permisos, concedidos))}")
+                    if all(concedidos):
+                        Clock.schedule_once(lambda dt: self._continuar_a_asistencia(), 0.5)
+                    else:
+                        Snackbar(text="Acepta TODOS los permisos e intenta de nuevo").open()
 
-            except Exception as e:
-                print(f"[PERMISOS] Error: {e}")
+                request_permissions(permisos_necesarios, _on_permisos)
+                return
 
-        self._continuar_a_asistencia()
+        except Exception as e:
+            Snackbar(text=f"Error permisos: {e}").open()
+            print(f"[PERMISOS] Error: {e}")
 
-    def _continuar_a_asistencia(self):
-        app = MDApp.get_running_app()
-        pa  = app.root.get_screen('asistencia')
-        pa.titulo_sesion = f"Cuadrilla {self.num_cuadrilla}"
-        pa.fecha_hoy     = datetime.datetime.now().strftime("%d/%m/%Y  %H:%M")
-        app.iniciar_escaneo_ble()
-        app.iniciar_respuesta_apuntador()
-        app.root.current = 'asistencia'
+    self._continuar_a_asistencia()
+
+def _continuar_a_asistencia(self):
+    Snackbar(text="Iniciando jornada...").open()
+    app = MDApp.get_running_app()
+    pa  = app.root.get_screen('asistencia')
+    pa.titulo_sesion = f"Cuadrilla {self.num_cuadrilla}"
+    pa.fecha_hoy     = datetime.datetime.now().strftime("%d/%m/%Y  %H:%M")
+    app.iniciar_escaneo_ble()
+    app.iniciar_respuesta_apuntador()
+    app.root.current = 'asistencia'
 
 
 class PantallaAsistencia(Screen):
