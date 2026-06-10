@@ -1,6 +1,6 @@
 # =============================================================================
 #  AgriCactus - App del CUADRILLERO  (main.py)
-#  v3.3 - Control completo de jornada con periodos y cambios de cuadro
+#  v3.4 - Soporte puesto fijo + periodos completos
 # =============================================================================
 
 import datetime
@@ -17,8 +17,6 @@ from kivy.utils import platform
 from kivymd.app import MDApp
 from kivymd.uix.snackbar import Snackbar
 from kivymd.uix.list import TwoLineIconListItem, IconLeftWidget, OneLineListItem
-from kivymd.uix.dialog import MDDialog
-from kivymd.uix.button import MDFlatButton, MDRaisedButton
 
 ACTIVIDADES = [
     ("1000","APOYO CAMPO AGUA"),("1001","APOYO CAMPO BAÑOS"),
@@ -36,30 +34,54 @@ ACTIVIDADES = [
     ("1032","APLICACION MOCHILA"),("1033","AUXILIAR DE RIEGO"),("1034","REGADOR"),
     ("1035","SUPERVISOR DE RIEGO"),("1036","PODA DIA"),("1037","PODA ENSAYO"),
     ("1038","CUADRILLERO"),("1039","SUPERVISOR"),("1040","SUPERVISOR GENERAL"),
+    ("1041","SUPERVISOR GENERAL 1"),("1042","SUPERVISOR RECLUTADOR 2"),
+    ("1043","SUPERVISOR RECLUTADOR 3"),("1044","SUPERVISOR RECLUTADOR 4"),
     ("1045","SACAR PLANTAS UVA"),("1046","DESHIERBE"),("1047","QUEMANDO ALAMBRE"),
     ("1048","APOYO CAMPO EN GENERAL"),("1049","LOMBRICARIO"),
     ("1050","CORTINA APLICACION"),("1051","PREPARADOR DE MEZCLA"),
+    ("1052","AUXILIAR PREPARADOR DE MEZCLAS"),("1053","CATERPILLAR"),
+    ("1054","TRITURADORA DE BROCHA"),("1055","RETROESCABADORA"),
     ("1056","AMARRE DE PUENTES Y EXTENCIONES"),("1057","AUXILIAR OPERADOR"),
     ("1058","OPERADOR"),("1059","EMPAQUE CALABAZA"),("1060","EMPAQUE CALABAZA 1"),
-    ("1063","LIMPIEZA DE CUADROS"),("1064","APOYO GUARDERIA"),
-    ("1080","PLANTACION"),("1081","INSTALACION PLASTICO Y CINTA"),
+    ("1061","LEVANTANDO CALABAZA"),("1062","MOVER CALABAZA"),
+    ("1063","LIMPIEZA DE CUADROS"),("1064","APOYO GUARDERIA"),("1065","BATANGA 1"),
+    ("1066","SERVICIO EN HACIENDA"),("1067","APOYO CAMPO ADMINISTRATIVO"),
+    ("1068","VELADOR POZO"),("1069","VELADOR EMPAQUE"),("1070","VELADOR TALLER"),
+    ("1071","VELADOR PORTERO"),("1072","GASTOS EMPAQUE CALABAZA"),("1074","TAXI"),
+    ("1075","JONALERO TAXI"),("1076","REFORZAR Y PARCHAR AGRIBON"),
+    ("1077","COLOCACION DE AROS"),("1078","ACARREO DE AROS Y AGRIBON"),
+    ("1079","ALIMENTANDO LOMBRICES"),("1080","PLANTACION"),
+    ("1081","INSTALACION PLASTICO Y CINTA"),("1082","PODA NOGAL SP + PLANTAS"),
+    ("1083","RECEPCION FUNDACION"),("1084","COLOCACION DE AGRIBON"),
     ("1085","ENTRENE"),("1086","MONTACARGUISTA"),
-    ("1087","MANTENIMIENTO DE EMPARRADO"),("1090","DESBROTE"),("1091","MATEADO"),
+    ("1087","MANTENIMIENTO DE EMPARRADO"),("1088","MARCACION PLANTACION"),
+    ("1089","APLICACION MOCHOMO TOPOS"),("1090","DESBROTE"),("1091","MATEADO"),
     ("1092","ACOMODO DE GUIA"),("1093","ATOMIZANDO"),("1094","DESCOLE"),
     ("1095","SELECCION DE RACIMOS"),("1096","DESHOJE"),("1097","ANILLADA"),
-    ("1098","DESPUNTE DE RACIMOS"),("1100","ETIQUETADOR SANDIA"),("1101","TARIMERO"),
+    ("1098","DESPUNTE DE RACIMOS"),("1099","MONTACARGUISTA SANDIA"),
+    ("1100","ETIQUETADOR SANDIA"),("1101","TARIMERO"),
+    ("1102","LIMPIEZA EMPAQUE SANDIA"),("1103","APOYO EMPAQUE SANDIA"),
+    ("1104","APUNTADOR COSECHA SANDIA"),("1106","TROQUE ACARREO DE SANDIA"),
+    ("1107","AUXILIAR ETIQUETADOR"),("1108","BAÑERAS"),
+    ("1109","SELECCION Y DESPUNTE DE RACIMOS"),("1110","TAPADO DE RACIMOS"),
     ("1112","RALEO POR DIA"),("1113","ARREGLO DE RACIMOS"),
     ("1114","ETIQUETADOR UVA"),("1115","CARGADOR UVA"),
-    ("1120","PASERO"),("1128","DESCHUPONE"),
+    ("1116","AUXILIAR CARGADOR UVA"),("1117","APOYO INOCUIDAD"),
+    ("1118","APOYO EMPAQUE UVA"),("1119","APOYO LIMPIEZA EMPAQUE UVA"),
+    ("1120","PASERO"),("1121","SUPERVISOR UVA CAMPO"),
+    ("1122","TROQUE ACARREO UVA"),("1123","ENCARGADA DE INOCUIDAD"),
+    ("1124","CUADRILLERO TAXI"),("1128","DESCHUPONE"),
     ("1129","INSTALACION DE EMPARRE"),("1130","DESEMPARRE"),
-    ("1133","CULTIVADORA"),("1135","BORDERO TRIPLE"),
+    ("1131","OPERADOR DUMPER"),("1133","CULTIVADORA"),
+    ("1134","APOYO CAMPO HERBICIDAS"),("1135","BORDERO TRIPLE"),
     ("1154","COSECHA NUEZ"),("1164","CONTRATO SANDIA"),("1165","CONTRATO UVA"),
     ("1172","CORTAR CALABAZA"),("1176","RIEGO RODADO"),("1178","CONTRATO PODA"),
     ("1240","COSECHA UVA DIARIO"),("1290","CONTRATO RALEO"),
     ("1300","PODA NOGAL"),("1301","QUITAR PLASTICO-CINTA"),("1302","SACAR GUIA"),
     ("1330","CONTRATO DESBROCHE"),("1389","PODA DIARIO 2023/2024"),
-    ("1395","TAREAS PLASTICO, CINTA Y AROS"),("1398","CORTA GUIAS"),
-    ("1399","BORDERO INVERTIDO"),("1421","CONTEO DE RACIMOS"),
+    ("1391","ACARREO Y MOJADO DE PLANTA"),("1395","TAREAS PLASTICO CINTA Y AROS"),
+    ("1398","CORTA GUIAS"),("1399","BORDERO INVERTIDO"),
+    ("1421","CONTEO DE RACIMOS"),("1442","ARREGLO DE RACIMOS 1/4"),
     ("1449","CONTAR PLANTAS"),("1456","PODA DIA 2024-2025"),
     ("1462","POLINIZADOR"),("1499","DESGALLE"),
     ("1500","EMPAQUE GENERAL BICENTENARIO"),("1507","CALIDAD EMPAQUE"),
@@ -67,9 +89,6 @@ ACTIVIDADES = [
     ("1542","ENCARGADA DE LABORATORIO"),
 ]
 
-# =============================================================================
-#  CONSTANTES
-# =============================================================================
 ARCHIVO_DATOS      = "cuadrillero_data.json"
 ARCHIVO_LISTA      = "lista_asistencia.json"
 PUERTO_ANUNCIO     = 45678
@@ -79,12 +98,11 @@ PUERTO_RECEPCION   = 45681
 PUERTO_ANUNCIO_CU  = 45682
 INTERVALO_ANUNCIO  = 30
 
-# Periodos de jornada
-PERIODO_ENTRADA    = "entrada"
-PERIODO_COMIDA     = "salida_comida"
-PERIODO_REGRESO    = "regreso_comida"
-PERIODO_CAMBIO     = "cambio_cuadro"
-PERIODO_SALIDA     = "salida_final"
+PERIODO_ENTRADA   = "entrada"
+PERIODO_COMIDA    = "salida_comida"
+PERIODO_REGRESO   = "regreso_comida"
+PERIODO_CAMBIO    = "cambio_cuadro"
+PERIODO_SALIDA    = "salida_final"
 
 
 def guardar_datos(datos: dict):
@@ -385,7 +403,6 @@ ScreenManager:
     MDFloatLayout:
         md_bg_color: 0.94, 0.96, 0.94, 1
 
-        # Encabezado
         MDFloatLayout:
             size_hint_y: 0.12
             pos_hint: {'x': 0, 'top': 1}
@@ -422,7 +439,6 @@ ScreenManager:
             pos_hint: {'x': 0, 'top': 0.88}
             md_bg_color: 0.96, 0.65, 0.14, 1
 
-        # Estado jornada
         MDCard:
             size_hint: (0.96, 0.055)
             pos_hint: {'center_x': 0.5, 'top': 0.875}
@@ -438,7 +454,6 @@ ScreenManager:
                 theme_text_color: "Custom"
                 text_color: 1, 1, 1, 1
 
-        # Cuadro + Actividad
         MDBoxLayout:
             orientation: 'horizontal'
             size_hint: (0.96, None)
@@ -461,7 +476,6 @@ ScreenManager:
                 size_hint_x: 0.65
                 on_release: app.root.current = 'buscador'
 
-        # Estadisticas
         MDCard:
             size_hint: (0.96, 0.09)
             pos_hint: {'center_x': 0.5, 'top': 0.73}
@@ -485,6 +499,21 @@ ScreenManager:
                         text_color: 0.18, 0.42, 0.18, 1
                     MDLabel:
                         text: "Presentes"
+                        font_style: "Caption"
+                        halign: "center"
+                        theme_text_color: "Secondary"
+
+                MDBoxLayout:
+                    orientation: 'vertical'
+                    MDLabel:
+                        text: root.total_fijos
+                        font_style: "H5"
+                        bold: True
+                        halign: "center"
+                        theme_text_color: "Custom"
+                        text_color: 0.18, 0.29, 0.55, 1
+                    MDLabel:
+                        text: "Fijos"
                         font_style: "Caption"
                         halign: "center"
                         theme_text_color: "Secondary"
@@ -519,7 +548,6 @@ ScreenManager:
                         halign: "center"
                         theme_text_color: "Secondary"
 
-        # Lista trabajadores
         MDCard:
             size_hint: (0.96, 0.32)
             pos_hint: {'center_x': 0.5, 'top': 0.64}
@@ -532,7 +560,7 @@ ScreenManager:
                 padding: '4dp'
 
                 MDLabel:
-                    text: "Trabajadores"
+                    text: "Trabajadores  [ azul = puesto fijo ]"
                     font_style: "Caption"
                     bold: True
                     halign: "center"
@@ -545,7 +573,6 @@ ScreenManager:
                     MDList:
                         id: lista_trabajadores
 
-        # Botones de periodo
         MDBoxLayout:
             orientation: 'horizontal'
             size_hint: (0.96, 0.07)
@@ -581,7 +608,6 @@ ScreenManager:
                 font_size: '10sp'
                 on_release: root.accion_periodo('cambio_cuadro')
 
-        # Botones secundarios
         MDBoxLayout:
             orientation: 'horizontal'
             size_hint: (0.96, 0.07)
@@ -649,7 +675,6 @@ ScreenManager:
         ScrollView:
             size_hint: (0.96, 0.68)
             pos_hint: {'center_x': 0.5, 'top': 0.76}
-
             MDList:
                 id: lista_actividades
 
@@ -809,10 +834,10 @@ class PantallaRegistro(Screen):
         cuadrilla  = self.ids.input_cuadrilla.text.strip()
 
         errores = []
-        if not nombre:       errores.append("nombre")
-        if len(nss) < 10:    errores.append("NSS (min 10 digitos)")
-        if not credencial:   errores.append("credencial")
-        if not cuadrilla:    errores.append("cuadrilla")
+        if not nombre:     errores.append("nombre")
+        if len(nss) < 10:  errores.append("NSS")
+        if not credencial: errores.append("credencial")
+        if not cuadrilla:  errores.append("cuadrilla")
         if not self.ruta_foto_seleccionada: errores.append("foto")
 
         if errores:
@@ -877,109 +902,125 @@ class PantallaAsistencia(Screen):
     fecha_hoy              = StringProperty("")
     total_presentes        = StringProperty("0")
     total_detectados       = StringProperty("0")
+    total_fijos            = StringProperty("0")
     estado_escucha         = StringProperty("Inactivo")
     color_estado_escucha   = ListProperty([0.6, 0.6, 0.6, 1])
     actividad_seleccionada = StringProperty("Seleccionar actividad...")
-    texto_estado_jornada   = StringProperty("JORNADA ABIERTA — Validando entrada")
+    texto_estado_jornada   = StringProperty("JORNADA ABIERTA")
     color_estado_jornada   = ListProperty([0.18, 0.42, 0.18, 1])
 
     def actualizar_lista_ui(self, trabajadores: dict):
         self.ids.lista_trabajadores.clear_widgets()
         presentes = 0
-        for credencial, info in trabajadores.items():
-            periodos  = info.get('periodos', [])
-            validado  = info.get('validado', False)
-            nombre    = info.get('nombre', f"Cred. {credencial}")
-            if validado:
-                presentes += 1
+        fijos     = 0
 
-            # Construir resumen de periodos
-            ultimo = periodos[-1] if periodos else {}
-            estado_txt = ultimo.get('tipo', 'Sin validar').replace('_', ' ').upper()
-            hora_txt   = ultimo.get('hora', '--:--')
+        # Ordenar: fijos primero
+        items_ordenados = sorted(
+            trabajadores.items(),
+            key=lambda x: (0 if x[1].get('tipo_trabajador') == 'FIJO' else 1)
+        )
+
+        for credencial, info in items_ordenados:
+            validado   = info.get('validado', False)
+            nombre     = info.get('nombre', f"Cred. {credencial}")
+            periodos   = info.get('periodos', [])
+            es_fijo    = info.get('tipo_trabajador', '') == 'FIJO'
+            puesto_desc = info.get('puesto_fijo_desc', '')
+
+            if validado:   presentes += 1
+            if es_fijo:    fijos += 1
+
+            ultimo     = periodos[-1] if periodos else {}
+            estado_txt = ultimo.get('tipo', '').replace('_', ' ').upper() or (
+                'PRESENTE' if validado else 'Detectado'
+            )
+            hora_txt = ultimo.get('hora', info.get('hora_deteccion', '--'))
+
+            if es_fijo:
+                icono_nombre = "briefcase-check"
+                icono_color  = (0.18, 0.29, 0.55, 1)
+            elif validado:
+                icono_nombre = "check-circle"
+                icono_color  = (0.18, 0.42, 0.18, 1)
+            else:
+                icono_nombre = "wifi"
+                icono_color  = (0.96, 0.65, 0.14, 1)
+
+            subtexto = (
+                f"[FIJO: {puesto_desc[:25]}]  {hora_txt}"
+                if es_fijo
+                else f"{estado_txt}  {hora_txt}  |  {len(periodos)} reg"
+            )
 
             icono = IconLeftWidget(
-                icon="check-circle" if validado else "wifi",
+                icon=icono_nombre,
                 theme_text_color="Custom",
-                icon_color=(0.18, 0.42, 0.18, 1) if validado else (0.96, 0.65, 0.14, 1)
+                icon_color=icono_color
             )
             item = TwoLineIconListItem(
                 text=f"[b]{nombre}[/b]  |  No. {credencial}",
-                secondary_text=f"{estado_txt}  {hora_txt}  |  {len(periodos)} registros",
-                on_release=lambda x, c=credencial: self._ver_detalle_trabajador(c)
+                secondary_text=subtexto,
             )
             item.add_widget(icono)
             self.ids.lista_trabajadores.add_widget(item)
+
         self.total_presentes  = str(presentes)
         self.total_detectados = str(len(trabajadores))
-
-    def _ver_detalle_trabajador(self, credencial):
-        app  = MDApp.get_running_app()
-        info = app.trabajadores_detectados.get(credencial, {})
-        periodos = info.get('periodos', [])
-        if not periodos:
-            Snackbar(text="Sin registros de periodos aun").open()
-            return
-        texto = "\n".join([
-            f"{p.get('tipo','').replace('_',' ').upper()}  {p.get('hora','--')}  "
-            f"{p.get('cuadro','')}  {p.get('actividad','')}"
-            for p in periodos
-        ])
-        Snackbar(text=texto[:100]).open()
+        self.total_fijos      = str(fijos)
 
     def accion_periodo(self, tipo: str):
-        app    = MDApp.get_running_app()
-        cuadro = self.ids.input_cuadro.text.strip().upper() or "SIN CUADRO"
+        app      = MDApp.get_running_app()
+        cuadro   = self.ids.input_cuadro.text.strip().upper() or "SIN CUADRO"
         actividad = self.actividad_seleccionada
+        ahora    = datetime.datetime.now().strftime("%H:%M:%S")
 
         if tipo == PERIODO_COMIDA:
-            # Salida a comida: registra sin validar al trabajador
-            ahora = datetime.datetime.now().strftime("%H:%M:%S")
             for cred in app.trabajadores_detectados:
                 if app.trabajadores_detectados[cred].get('validado'):
                     app.trabajadores_detectados[cred].setdefault('periodos', []).append({
-                        "tipo":      PERIODO_COMIDA,
-                        "hora":      ahora,
-                        "cuadro":    cuadro,
-                        "actividad": actividad
+                        "tipo": PERIODO_COMIDA, "hora": ahora,
+                        "cuadro": cuadro, "actividad": actividad
                     })
             self.texto_estado_jornada   = f"COMIDA — Salida: {ahora}"
             self.color_estado_jornada   = [0.96, 0.65, 0.14, 1]
             self.actualizar_lista_ui(app.trabajadores_detectados)
-            Snackbar(text=f"Salida a comida registrada: {ahora}").open()
+            Snackbar(text=f"Salida a comida: {ahora}").open()
             return
 
-        # Para entrada, regreso, cambio → validar a todos los detectados
+        # Para otros periodos validar a los detectados (excepto fijos)
         count = 0
         for cred in list(app.trabajadores_detectados.keys()):
-            app.enviar_validacion(cred, tipo, cuadro, actividad)
-            count += 1
+            info = app.trabajadores_detectados[cred]
+            if info.get('tipo_trabajador') != 'FIJO':
+                app.enviar_validacion(cred, tipo, cuadro, actividad)
+                count += 1
 
         etiquetas = {
             PERIODO_ENTRADA:  "VALIDANDO ENTRADA",
-            PERIODO_REGRESO:  "VALIDANDO REGRESO DE COMIDA",
+            PERIODO_REGRESO:  "VALIDANDO REGRESO",
             PERIODO_CAMBIO:   "VALIDANDO CAMBIO DE CUADRO",
         }
-        self.texto_estado_jornada = etiquetas.get(tipo, tipo.upper())
         colores = {
             PERIODO_ENTRADA: [0.18, 0.42, 0.18, 1],
             PERIODO_REGRESO: [0.18, 0.29, 0.55, 1],
             PERIODO_CAMBIO:  [0.55, 0.18, 0.55, 1],
         }
+        self.texto_estado_jornada = etiquetas.get(tipo, tipo.upper())
         self.color_estado_jornada = colores.get(tipo, [0.3, 0.3, 0.3, 1])
-        Snackbar(text=f"{etiquetas.get(tipo, tipo)} — {count} trabajadores").open()
+        Snackbar(text=f"{etiquetas.get(tipo, tipo)} — {count} jornaleros").open()
 
     def validar_todos(self):
-        app = MDApp.get_running_app()
-        cuadro    = self.ids.input_cuadro.text.strip().upper() or "SIN CUADRO"
+        app      = MDApp.get_running_app()
+        cuadro   = self.ids.input_cuadro.text.strip().upper() or "SIN CUADRO"
         actividad = self.actividad_seleccionada
         count = 0
         for cred in list(app.trabajadores_detectados.keys()):
-            if not app.trabajadores_detectados[cred].get('validado'):
+            info = app.trabajadores_detectados[cred]
+            if not info.get('validado') and info.get('tipo_trabajador') != 'FIJO':
                 app.enviar_validacion(cred, PERIODO_ENTRADA, cuadro, actividad)
                 count += 1
         Snackbar(
-            text=f"{count} validados" if count else "Todos ya validados"
+            text=f"{count} jornaleros validados" if count else "Todos validados"
         ).open()
 
     def ver_resumen(self):
@@ -1031,37 +1072,56 @@ class PantallaResumen(Screen):
     def construir_resumen(self, trabajadores, cuadrillero, cuadrilla,
                            cuadro, actividad, cerrada=False):
         presentes = sum(1 for v in trabajadores.values() if v.get('validado'))
+        fijos     = sum(1 for v in trabajadores.values()
+                        if v.get('tipo_trabajador') == 'FIJO')
         total     = len(trabajadores)
         fecha     = datetime.datetime.now().strftime("%d/%m/%Y  %H:%M")
         estado    = "CERRADA" if cerrada else "EN CURSO"
+
         self.resumen_texto = (
             f"Cuadrilla {cuadrilla}  [{estado}]\n"
-            f"Cuadro: {cuadro}\n"
-            f"Act: {actividad}\n"
+            f"Cuadro: {cuadro}  |  Act: {actividad[:30]}\n"
             f"{cuadrillero.replace(chr(10),' ')}  |  {fecha}\n"
-            f"Presentes: {presentes} / {total}"
+            f"Presentes: {presentes}/{total}  Fijos: {fijos}"
         )
-        self.ids.lista_resumen.clear_widgets()
-        for cred, info in trabajadores.items():
-            validado = info.get('validado', False)
-            nombre   = info.get('nombre', '').replace('\n', ' ')
-            periodos = info.get('periodos', [])
 
-            # Resumen de periodos
-            periodos_txt = "  ".join([
-                f"{p.get('tipo','').replace('_',' ').upper()[:3]} {p.get('hora','')}"
+        self.ids.lista_resumen.clear_widgets()
+
+        # Ordenar: fijos primero
+        items_ord = sorted(
+            trabajadores.items(),
+            key=lambda x: (0 if x[1].get('tipo_trabajador') == 'FIJO' else 1)
+        )
+
+        for cred, info in items_ord:
+            validado   = info.get('validado', False)
+            nombre     = info.get('nombre', '').replace('\n', ' ')
+            periodos   = info.get('periodos', [])
+            es_fijo    = info.get('tipo_trabajador', '') == 'FIJO'
+            puesto_desc = info.get('puesto_fijo_desc', '')
+
+            per_txt = "  ".join([
+                f"{p.get('tipo','').replace('_',' ')[:4].upper()} {p.get('hora','')}"
                 for p in periodos
-            ]) or "Sin periodos"
+            ]) or ('✓ FIJO AUTO' if es_fijo and validado else
+                   ('✓ PRESENTE' if validado else '✗ AUSENTE'))
+
+            if es_fijo:
+                icono_n = "briefcase-check"
+                icono_c = (0.18, 0.29, 0.55, 1)
+            else:
+                icono_n = "check" if validado else "close"
+                icono_c = (0.18, 0.42, 0.18, 1) if validado else (0.72, 0.10, 0.10, 1)
 
             icono = IconLeftWidget(
-                icon="check" if validado else "close",
+                icon=icono_n,
                 theme_text_color="Custom",
-                icon_color=(0.18, 0.42, 0.18, 1) if validado else (0.72, 0.10, 0.10, 1)
+                icon_color=icono_c
             )
             item = TwoLineIconListItem(
-                text=f"Cred. {cred}  —  {nombre}",
-                secondary_text=periodos_txt if periodos_txt else (
-                    '✓ PRESENTE' if validado else '✗ AUSENTE'
+                text=f"{'[FIJO] ' if es_fijo else ''}Cred. {cred}  —  {nombre}",
+                secondary_text=(
+                    f"{puesto_desc[:30]}" if es_fijo else per_txt
                 ),
             )
             item.add_widget(icono)
@@ -1070,15 +1130,15 @@ class PantallaResumen(Screen):
     def _payload_actual(self):
         app = MDApp.get_running_app()
         return {
-            "tipo":          "LISTA_CUADRILLA",
-            "fecha":         datetime.datetime.now().strftime("%Y-%m-%d"),
-            "hora_reporte":  datetime.datetime.now().strftime("%H:%M:%S"),
-            "cuadrilla":     app.num_cuadrilla,
-            "cuadrillero":   app.nombre_cuadrillero,
-            "cuadro":        app.cuadro_trabajo,
-            "actividad":     app.actividad_trabajo,
+            "tipo":            "LISTA_CUADRILLA",
+            "fecha":           datetime.datetime.now().strftime("%Y-%m-%d"),
+            "hora_reporte":    datetime.datetime.now().strftime("%H:%M:%S"),
+            "cuadrilla":       app.num_cuadrilla,
+            "cuadrillero":     app.nombre_cuadrillero,
+            "cuadro":          app.cuadro_trabajo,
+            "actividad":       app.actividad_trabajo,
             "jornada_cerrada": app.jornada_cerrada,
-            "trabajadores":  app.trabajadores_detectados
+            "trabajadores":    app.trabajadores_detectados
         }
 
     def guardar_avance(self):
@@ -1086,19 +1146,17 @@ class PantallaResumen(Screen):
         payload = self._payload_actual()
         payload["tipo_reporte"] = "AVANCE"
         guardar_lista(payload)
-        Snackbar(text="Avance guardado — el apuntador puede pedir la lista").open()
+        Snackbar(text="Avance guardado").open()
         app.root.current = 'asistencia'
 
     def cerrar_jornada(self):
-        app     = MDApp.get_running_app()
-        ahora   = datetime.datetime.now().strftime("%H:%M:%S")
+        app   = MDApp.get_running_app()
+        ahora = datetime.datetime.now().strftime("%H:%M:%S")
 
-        # Registrar salida final para todos los validados
         for cred in app.trabajadores_detectados:
             if app.trabajadores_detectados[cred].get('validado'):
                 app.trabajadores_detectados[cred].setdefault('periodos', []).append({
-                    "tipo":  PERIODO_SALIDA,
-                    "hora":  ahora,
+                    "tipo": PERIODO_SALIDA, "hora": ahora,
                     "cuadro": app.cuadro_trabajo,
                     "actividad": app.actividad_trabajo
                 })
@@ -1170,18 +1228,23 @@ class CuadrilleroAgriCactusApp(MDApp):
                     sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
                     sock.bind(('', PUERTO_ANUNCIO))
                     sock.settimeout(2.0)
+
                     while self._escucha_activa:
                         try:
                             datos_raw, addr = sock.recvfrom(1024)
                             msg    = datos_raw.decode('utf-8').strip()
                             partes = msg.split(':')
+
                             if len(partes) >= 4 and partes[0] == 'PRESENTE':
-                                cred      = partes[1]
-                                cuad      = partes[2]
-                                nombre    = partes[3]
-                                lat       = partes[4] if len(partes) > 4 else "0"
-                                lon       = partes[5] if len(partes) > 5 else "0"
-                                conf      = int(partes[6]) if len(partes) > 6 else 0
+                                cred         = partes[1]
+                                cuad         = partes[2]
+                                nombre       = partes[3]
+                                lat          = partes[4] if len(partes) > 4 else "0"
+                                lon          = partes[5] if len(partes) > 5 else "0"
+                                conf         = int(partes[6]) if len(partes) > 6 else 0
+                                tipo_trab    = partes[7] if len(partes) > 7 else "JORNALERO"
+                                puesto_clave = partes[8] if len(partes) > 8 else ""
+                                puesto_desc  = partes[9] if len(partes) > 9 else ""
 
                                 if cuad != str(self.num_cuadrilla):
                                     continue
@@ -1192,14 +1255,26 @@ class CuadrilleroAgriCactusApp(MDApp):
 
                                 if cred not in self.trabajadores_detectados:
                                     self.trabajadores_detectados[cred] = {
-                                        "nombre":           nombre,
-                                        "hora_deteccion":   ahora,
-                                        "validado":         False,
-                                        "ip":               ip,
-                                        "gps":              gps_txt,
-                                        "confirmaciones":   conf,
-                                        "periodos":         []
+                                        "nombre":            nombre,
+                                        "hora_deteccion":    ahora,
+                                        "validado":          False,
+                                        "ip":                ip,
+                                        "gps":               gps_txt,
+                                        "confirmaciones":    conf,
+                                        "tipo_trabajador":   tipo_trab,
+                                        "puesto_fijo_clave": puesto_clave,
+                                        "puesto_fijo_desc":  puesto_desc,
+                                        "periodos":          []
                                     }
+                                    # Auto-marcar fijo como presente
+                                    if tipo_trab == 'FIJO':
+                                        self.trabajadores_detectados[cred]['validado'] = True
+                                        self.trabajadores_detectados[cred]['periodos'].append({
+                                            "tipo":  "entrada",
+                                            "hora":  ahora,
+                                            "cuadro": "",
+                                            "actividad": puesto_desc
+                                        })
                                 else:
                                     self.trabajadores_detectados[cred].update({
                                         "ip":             ip,
@@ -1207,11 +1282,14 @@ class CuadrilleroAgriCactusApp(MDApp):
                                         "gps":            gps_txt,
                                         "confirmaciones": conf
                                     })
+
                                 Clock.schedule_once(lambda dt: self._actualizar_ui(), 0)
+
                         except socket.timeout:
                             continue
                         except Exception as e:
                             print(f"[WIFI] Error: {e}")
+
             except Exception as e:
                 print(f"[WIFI] Error servidor: {e}")
             finally:
@@ -1231,8 +1309,8 @@ class CuadrilleroAgriCactusApp(MDApp):
         if not ip:
             return
 
-        fecha   = datetime.datetime.now().strftime("%Y-%m-%d")
-        cuadro_enc  = cuadro.replace(':', '-')
+        fecha         = datetime.datetime.now().strftime("%Y-%m-%d")
+        cuadro_enc    = cuadro.replace(':', '-')
         actividad_enc = actividad.replace(':', '-')[:20]
         mensaje = (
             f"VALIDAR:{credencial}:{self.num_cuadrilla}:{fecha}:{tipo}"
@@ -1260,7 +1338,7 @@ class CuadrilleroAgriCactusApp(MDApp):
                             ), 0
                         )
             except Exception as e:
-                print(f"[WIFI] Error: {e}")
+                print(f"[WIFI] Error validacion: {e}")
 
         threading.Thread(target=_enviar, daemon=True).start()
 
@@ -1269,18 +1347,12 @@ class CuadrilleroAgriCactusApp(MDApp):
             return
         ahora = datetime.datetime.now().strftime("%H:%M:%S")
         info  = self.trabajadores_detectados[credencial]
-
-        # Marcar como validado en entrada
         if tipo == PERIODO_ENTRADA:
             info['validado']        = True
             info['hora_validacion'] = ahora
-
-        # Agregar periodo
         info.setdefault('periodos', []).append({
-            "tipo":      tipo,
-            "hora":      ahora,
-            "cuadro":    cuadro,
-            "actividad": actividad
+            "tipo": tipo, "hora": ahora,
+            "cuadro": cuadro, "actividad": actividad
         })
         self._actualizar_ui()
 
