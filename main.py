@@ -1,6 +1,6 @@
 # =============================================================================
 #  AgriCactus - App del CUADRILLERO  (main.py)
-#  v3.1 - Cuadro+Actividad separados + buscador actividades + señal apuntador
+#  v3.2 - Cierre de jornada + estética mejorada
 # =============================================================================
 
 import datetime
@@ -11,7 +11,7 @@ import threading
 
 from kivy.lang import Builder
 from kivy.clock import Clock
-from kivy.properties import StringProperty, BooleanProperty, ListProperty, ObjectProperty
+from kivy.properties import StringProperty, BooleanProperty, ListProperty
 from kivy.uix.screenmanager import Screen, FadeTransition
 from kivy.utils import platform
 from kivymd.app import MDApp
@@ -90,16 +90,14 @@ ACTIVIDADES = [
     ("1162","COSECHA NUEZ CUBETAS SP 50S"),("1164","CONTRATO SANDIA"),
     ("1165","CONTRATO UVA"),("1172","CORTAR CALABAZA"),
     ("1176","RIEGO RODADO"),("1178","CONTRATO PODA"),
-    ("1180","PLANTACION"),("1182","PODA NOGAL SP"),("1183","PODA NOGAL AC"),
     ("1240","COSECHA UVA DIARIO"),("1290","CONTRATO RALEO"),
     ("1300","PODA NOGAL"),("1301","QUITAR PLASTICO-CINTA"),
     ("1302","SACAR GUIA"),("1330","CONTRATO DESBROCHE"),
     ("1389","PODA DIARIO 2023/2024"),("1391","ACARREO Y MOJADO DE PLANTA"),
     ("1395","TAREAS PLASTICO, CINTA Y AROS"),("1398","CORTA GUIAS"),
     ("1399","BORDERO INVERTIDO"),("1421","CONTEO DE RACIMOS"),
-    ("1442","ARREGLO DE RACIMOS 1/4"),("1446","DESHIERBE"),
-    ("1449","CONTAR PLANTAS"),("1456","PODA DIA 2024-2025"),
-    ("1458","AMARRE DE PUENTES Y EXTENSIONES 2024"),("1462","POLINIZADOR"),
+    ("1442","ARREGLO DE RACIMOS 1/4"),("1449","CONTAR PLANTAS"),
+    ("1456","PODA DIA 2024-2025"),("1462","POLINIZADOR"),
     ("1499","DESGALLE"),("1500","EMPAQUE GENERAL BICENTENARIO"),
     ("1503","DESHOJE 2 TARDEADA"),("1504","ACOMODO DE GUIA 2 TARDEADA"),
     ("1507","CALIDAD EMPAQUE"),("1508","ARMADO DE CAJA UVA"),
@@ -115,8 +113,8 @@ PUERTO_ANUNCIO     = 45678
 PUERTO_VALIDACION  = 45679
 PUERTO_CUADRILLERO = 45680
 PUERTO_RECEPCION   = 45681
-PUERTO_ANUNCIO_CU  = 45682   # Cuadrillero -> Apuntador (anuncio presencia)
-INTERVALO_ANUNCIO  = 30      # segundos entre anuncios al apuntador
+PUERTO_ANUNCIO_CU  = 45682
+INTERVALO_ANUNCIO  = 30
 
 
 def guardar_datos(datos: dict):
@@ -269,7 +267,7 @@ ScreenManager:
     name: 'credencial'
 
     MDFloatLayout:
-        md_bg_color: 0.96, 0.96, 0.94, 1
+        md_bg_color: 0.94, 0.96, 0.94, 1
 
         MDFloatLayout:
             size_hint_x: 0.06
@@ -277,10 +275,10 @@ ScreenManager:
             md_bg_color: 0.18, 0.29, 0.12, 1
 
         MDCard:
-            size_hint: (0.92, 0.72)
+            size_hint: (0.92, 0.76)
             pos_hint: {'right': 0.99, 'top': 0.97}
-            elevation: 3
-            radius: [12, 12, 12, 12]
+            elevation: 4
+            radius: [16, 16, 16, 16]
             md_bg_color: 1, 1, 1, 1
 
             MDFloatLayout:
@@ -292,10 +290,10 @@ ScreenManager:
 
                     Image:
                         source: "logo_agricactus.png"
-                        size_hint: (0.48, 0.82)
+                        size_hint: (0.46, 0.82)
                         allow_stretch: True
                         keep_ratio: True
-                        pos_hint: {'center_x': 0.28, 'center_y': 0.5}
+                        pos_hint: {'center_x': 0.27, 'center_y': 0.5}
 
                     MDLabel:
                         text: "CUADRILLERO"
@@ -304,23 +302,28 @@ ScreenManager:
                         halign: "center"
                         theme_text_color: "Custom"
                         text_color: 0.96, 0.65, 0.14, 1
-                        pos_hint: {'center_x': 0.74, 'center_y': 0.65}
-                        size_hint: (0.5, 0.2)
+                        pos_hint: {'center_x': 0.72, 'center_y': 0.65}
+                        size_hint: (0.52, 0.22)
 
                     MDLabel:
                         text: "CREDENCIAL DIGITAL"
                         font_style: "Caption"
                         halign: "center"
                         theme_text_color: "Custom"
-                        text_color: 0.8, 0.9, 0.8, 1
-                        pos_hint: {'center_x': 0.74, 'center_y': 0.35}
-                        size_hint: (0.5, 0.2)
+                        text_color: 0.78, 0.92, 0.78, 1
+                        pos_hint: {'center_x': 0.72, 'center_y': 0.32}
+                        size_hint: (0.52, 0.22)
+
+                MDBoxLayout:
+                    size_hint: (1, 0.004)
+                    pos_hint: {'x': 0, 'top': 0.80}
+                    md_bg_color: 0.96, 0.65, 0.14, 1
 
                 FitImage:
                     source: root.ruta_foto
-                    size_hint: (0.34, 0.38)
-                    pos_hint: {'x': 0.04, 'center_y': 0.57}
-                    radius: [8, 8, 8, 8]
+                    size_hint: (0.30, 0.36)
+                    pos_hint: {'x': 0.04, 'top': 0.78}
+                    radius: [10, 10, 10, 10]
 
                 MDLabel:
                     text: root.nombre_cuadrillero
@@ -330,18 +333,18 @@ ScreenManager:
                     halign: "left"
                     valign: "center"
                     theme_text_color: "Custom"
-                    text_color: 0.18, 0.29, 0.12, 1
+                    text_color: 0.12, 0.22, 0.08, 1
                     text_size: self.size
-                    pos_hint: {'x': 0.42, 'center_y': 0.64}
-                    size_hint: (0.55, 0.18)
+                    pos_hint: {'x': 0.38, 'top': 0.78}
+                    size_hint: (0.58, 0.16)
 
                 MDLabel:
                     text: "Ingreso: " + root.fecha_ingreso
                     font_style: "Caption"
                     halign: "left"
                     theme_text_color: "Secondary"
-                    pos_hint: {'x': 0.42, 'center_y': 0.53}
-                    size_hint: (0.55, 0.06)
+                    pos_hint: {'x': 0.38, 'top': 0.62}
+                    size_hint: (0.58, 0.05)
 
                 MDLabel:
                     text: "Cuadrilla a cargo: " + root.num_cuadrilla
@@ -349,13 +352,13 @@ ScreenManager:
                     bold: True
                     halign: "left"
                     theme_text_color: "Custom"
-                    text_color: 0.29, 0.40, 0.25, 1
-                    pos_hint: {'x': 0.42, 'center_y': 0.46}
-                    size_hint: (0.55, 0.06)
+                    text_color: 0.18, 0.42, 0.18, 1
+                    pos_hint: {'x': 0.38, 'top': 0.57}
+                    size_hint: (0.58, 0.05)
 
                 MDBoxLayout:
-                    size_hint: (0.88, 0.005)
-                    pos_hint: {'center_x': 0.5, 'center_y': 0.38}
+                    size_hint: (0.90, 0.004)
+                    pos_hint: {'center_x': 0.5, 'top': 0.50}
                     md_bg_color: 0.96, 0.65, 0.14, 1
 
                 MDLabel:
@@ -365,18 +368,18 @@ ScreenManager:
                     halign: "left"
                     theme_text_color: "Custom"
                     text_color: 0.18, 0.29, 0.12, 1
-                    pos_hint: {'x': 0.06, 'center_y': 0.32}
+                    pos_hint: {'x': 0.06, 'top': 0.48}
                     size_hint: (0.5, 0.06)
 
                 MDLabel:
                     text: "No. " + root.num_credencial
-                    font_style: "H5"
+                    font_style: "H4"
                     bold: True
                     halign: "center"
                     theme_text_color: "Custom"
-                    text_color: 0.18, 0.29, 0.12, 1
-                    pos_hint: {'center_x': 0.5, 'center_y': 0.22}
-                    size_hint: (0.88, 0.08)
+                    text_color: 0.12, 0.22, 0.08, 1
+                    pos_hint: {'center_x': 0.5, 'top': 0.40}
+                    size_hint: (0.88, 0.10)
 
                 MDFloatLayout:
                     size_hint_y: 0.05
@@ -392,7 +395,7 @@ ScreenManager:
         MDRaisedButton:
             text: "INICIAR JORNADA"
             md_bg_color: 0.18, 0.29, 0.12, 1
-            pos_hint: {'center_x': 0.55, 'y': 0.16}
+            pos_hint: {'center_x': 0.55, 'y': 0.13}
             size_hint: (0.80, 0.07)
             elevation: 4
             on_release: root.ir_a_asistencia()
@@ -402,7 +405,7 @@ ScreenManager:
             theme_text_color: "Custom"
             text_color: 0.18, 0.29, 0.12, 1
             line_color: 0.18, 0.29, 0.12, 1
-            pos_hint: {'center_x': 0.55, 'y': 0.07}
+            pos_hint: {'center_x': 0.55, 'y': 0.05}
             size_hint: (0.80, 0.07)
             on_release: app.root.current = 'registro'
 
@@ -411,7 +414,7 @@ ScreenManager:
     name: 'asistencia'
 
     MDFloatLayout:
-        md_bg_color: 0.96, 0.96, 0.94, 1
+        md_bg_color: 0.94, 0.96, 0.94, 1
 
         MDFloatLayout:
             size_hint_y: 0.13
@@ -420,10 +423,10 @@ ScreenManager:
 
             Image:
                 source: "logo_agricactus.png"
-                size_hint: (0.28, 0.80)
+                size_hint: (0.26, 0.78)
                 allow_stretch: True
                 keep_ratio: True
-                pos_hint: {'center_x': 0.16, 'center_y': 0.5}
+                pos_hint: {'center_x': 0.15, 'center_y': 0.5}
 
             MDLabel:
                 text: root.titulo_sesion
@@ -432,8 +435,8 @@ ScreenManager:
                 halign: "center"
                 theme_text_color: "Custom"
                 text_color: 1, 1, 1, 1
-                pos_hint: {'center_x': 0.58, 'center_y': 0.60}
-                size_hint: (0.66, 0.4)
+                pos_hint: {'center_x': 0.58, 'center_y': 0.62}
+                size_hint: (0.66, 0.38)
 
             MDLabel:
                 text: root.fecha_hoy
@@ -441,26 +444,43 @@ ScreenManager:
                 halign: "center"
                 theme_text_color: "Custom"
                 text_color: 0.96, 0.65, 0.14, 1
-                pos_hint: {'center_x': 0.58, 'center_y': 0.28}
-                size_hint: (0.66, 0.3)
+                pos_hint: {'center_x': 0.58, 'center_y': 0.26}
+                size_hint: (0.66, 0.28)
 
         MDBoxLayout:
-            size_hint_y: 0.005
+            size_hint_y: 0.004
             pos_hint: {'x': 0, 'top': 0.87}
             md_bg_color: 0.96, 0.65, 0.14, 1
 
+        # ── Estado jornada ────────────────────────────────────────────────────
+        MDCard:
+            size_hint: (0.96, 0.06)
+            pos_hint: {'center_x': 0.5, 'top': 0.86}
+            elevation: 1
+            radius: [8, 8, 8, 8]
+            md_bg_color: root.color_estado_jornada
+
+            MDLabel:
+                text: root.texto_estado_jornada
+                font_style: "Caption"
+                bold: True
+                halign: "center"
+                theme_text_color: "Custom"
+                text_color: 1, 1, 1, 1
+
+        # ── Cuadro + Actividad ────────────────────────────────────────────────
         MDBoxLayout:
             orientation: 'horizontal'
             size_hint: (0.96, None)
             height: '48dp'
-            pos_hint: {'center_x': 0.5, 'top': 0.86}
+            pos_hint: {'center_x': 0.5, 'top': 0.79}
             spacing: '8dp'
 
             MDTextField:
                 id: input_cuadro
                 hint_text: "Cuadro / Lote"
                 line_color_focus: 0.18, 0.29, 0.12, 1
-                size_hint_x: 0.4
+                size_hint_x: 0.38
 
             MDRectangleFlatButton:
                 id: btn_actividad
@@ -468,14 +488,15 @@ ScreenManager:
                 theme_text_color: "Custom"
                 text_color: 0.18, 0.29, 0.12, 1
                 line_color: 0.18, 0.29, 0.12, 1
-                size_hint_x: 0.6
+                size_hint_x: 0.62
                 on_release: app.root.current = 'buscador'
 
+        # ── Estadisticas ──────────────────────────────────────────────────────
         MDCard:
             size_hint: (0.96, 0.10)
-            pos_hint: {'center_x': 0.5, 'top': 0.75}
+            pos_hint: {'center_x': 0.5, 'top': 0.70}
             elevation: 2
-            radius: [8, 8, 8, 8]
+            radius: [10, 10, 10, 10]
             md_bg_color: 1, 1, 1, 1
 
             MDBoxLayout:
@@ -491,7 +512,7 @@ ScreenManager:
                         bold: True
                         halign: "center"
                         theme_text_color: "Custom"
-                        text_color: 0.18, 0.29, 0.12, 1
+                        text_color: 0.18, 0.42, 0.18, 1
                     MDLabel:
                         text: "Presentes"
                         font_style: "Caption"
@@ -523,16 +544,17 @@ ScreenManager:
                         theme_text_color: "Custom"
                         text_color: root.color_estado_escucha
                     MDLabel:
-                        text: "Estado WiFi"
+                        text: "WiFi"
                         font_style: "Caption"
                         halign: "center"
                         theme_text_color: "Secondary"
 
+        # ── Lista trabajadores ────────────────────────────────────────────────
         MDCard:
-            size_hint: (0.96, 0.44)
-            pos_hint: {'center_x': 0.5, 'top': 0.64}
+            size_hint: (0.96, 0.38)
+            pos_hint: {'center_x': 0.5, 'top': 0.59}
             elevation: 2
-            radius: [8, 8, 8, 8]
+            radius: [10, 10, 10, 10]
             md_bg_color: 1, 1, 1, 1
 
             MDBoxLayout:
@@ -547,17 +569,18 @@ ScreenManager:
                     theme_text_color: "Custom"
                     text_color: 0.18, 0.29, 0.12, 1
                     size_hint_y: None
-                    height: '28dp'
+                    height: '26dp'
 
                 ScrollView:
                     MDList:
                         id: lista_trabajadores
 
+        # ── Botones principales ───────────────────────────────────────────────
         MDBoxLayout:
             orientation: 'horizontal'
             size_hint: (0.96, 0.08)
-            pos_hint: {'center_x': 0.5, 'y': 0.09}
-            spacing: '6dp'
+            pos_hint: {'center_x': 0.5, 'y': 0.10}
+            spacing: '8dp'
 
             MDRaisedButton:
                 text: "VALIDAR TODOS"
@@ -569,7 +592,7 @@ ScreenManager:
             MDRaisedButton:
                 text: "VER RESUMEN"
                 md_bg_color: 0.96, 0.65, 0.14, 1
-                text_color: 0.18, 0.29, 0.12, 1
+                text_color: 0.12, 0.22, 0.08, 1
                 size_hint_x: 0.5
                 elevation: 3
                 on_release: root.ver_resumen()
@@ -579,7 +602,7 @@ ScreenManager:
             theme_text_color: "Custom"
             text_color: 0.18, 0.29, 0.12, 1
             line_color: 0.18, 0.29, 0.12, 1
-            size_hint: (0.96, 0.07)
+            size_hint: (0.96, 0.08)
             pos_hint: {'center_x': 0.5, 'y': 0.01}
             on_release: app.root.current = 'credencial'
 
@@ -588,7 +611,7 @@ ScreenManager:
     name: 'buscador'
 
     MDFloatLayout:
-        md_bg_color: 0.96, 0.96, 0.94, 1
+        md_bg_color: 0.94, 0.96, 0.94, 1
 
         MDFloatLayout:
             size_hint_y: 0.13
@@ -606,13 +629,13 @@ ScreenManager:
                 size_hint: (1, 1)
 
         MDBoxLayout:
-            size_hint_y: 0.005
+            size_hint_y: 0.004
             pos_hint: {'x': 0, 'top': 0.87}
             md_bg_color: 0.96, 0.65, 0.14, 1
 
         MDTextField:
             id: input_buscar
-            hint_text: "Buscar actividad por nombre o clave..."
+            hint_text: "Buscar por nombre o clave..."
             line_color_focus: 0.18, 0.29, 0.12, 1
             pos_hint: {'center_x': 0.5, 'top': 0.85}
             size_hint: (0.96, None)
@@ -626,11 +649,9 @@ ScreenManager:
             MDList:
                 id: lista_actividades
 
-        MDRectangleFlatButton:
+        MDRaisedButton:
             text: "CANCELAR"
-            theme_text_color: "Custom"
-            text_color: 0.72, 0.10, 0.10, 1
-            line_color: 0.72, 0.10, 0.10, 1
+            md_bg_color: 0.65, 0.08, 0.08, 1
             size_hint: (0.96, 0.07)
             pos_hint: {'center_x': 0.5, 'y': 0.01}
             on_release: app.root.current = 'asistencia'
@@ -640,7 +661,7 @@ ScreenManager:
     name: 'resumen'
 
     MDFloatLayout:
-        md_bg_color: 0.96, 0.96, 0.94, 1
+        md_bg_color: 0.94, 0.96, 0.94, 1
 
         MDFloatLayout:
             size_hint_y: 0.13
@@ -658,15 +679,15 @@ ScreenManager:
                 size_hint: (1, 1)
 
         MDBoxLayout:
-            size_hint_y: 0.005
+            size_hint_y: 0.004
             pos_hint: {'x': 0, 'top': 0.87}
             md_bg_color: 0.96, 0.65, 0.14, 1
 
         MDCard:
-            size_hint: (0.96, 0.70)
+            size_hint: (0.96, 0.68)
             pos_hint: {'center_x': 0.5, 'top': 0.85}
-            elevation: 2
-            radius: [8, 8, 8, 8]
+            elevation: 3
+            radius: [12, 12, 12, 12]
             md_bg_color: 1, 1, 1, 1
 
             MDBoxLayout:
@@ -676,12 +697,12 @@ ScreenManager:
 
                 MDLabel:
                     text: root.resumen_texto
-                    font_style: "Body1"
+                    font_style: "Body2"
                     halign: "center"
                     theme_text_color: "Custom"
-                    text_color: 0.18, 0.29, 0.12, 1
+                    text_color: 0.12, 0.22, 0.08, 1
                     size_hint_y: None
-                    height: '96dp'
+                    height: '88dp'
 
                 ScrollView:
                     MDList:
@@ -694,16 +715,16 @@ ScreenManager:
             spacing: '8dp'
 
             MDRaisedButton:
-                text: "GUARDAR LISTA"
+                text: "GUARDAR Y CERRAR"
                 md_bg_color: 0.18, 0.29, 0.12, 1
                 size_hint_x: 0.5
                 elevation: 3
-                on_release: root.guardar_lista_dia()
+                on_release: root.guardar_y_cerrar_jornada()
 
             MDRaisedButton:
                 text: "REGRESAR"
                 md_bg_color: 0.96, 0.65, 0.14, 1
-                text_color: 0.18, 0.29, 0.12, 1
+                text_color: 0.12, 0.22, 0.08, 1
                 size_hint_x: 0.5
                 elevation: 3
                 on_release: app.root.current = 'asistencia'
@@ -845,9 +866,8 @@ class PantallaCredencial(Screen):
         pa.fecha_hoy     = datetime.datetime.now().strftime("%d/%m/%Y  %H:%M")
         app.iniciar_escucha_trabajadores()
         app.iniciar_respuesta_apuntador()
-        app.iniciar_anuncio_apuntador()
         app.root.current = 'asistencia'
-        Snackbar(text="Escuchando trabajadores...").open()
+        Snackbar(text="Jornada iniciada — escuchando trabajadores").open()
 
 
 class PantallaAsistencia(Screen):
@@ -858,6 +878,8 @@ class PantallaAsistencia(Screen):
     estado_escucha       = StringProperty("Inactivo")
     color_estado_escucha = ListProperty([0.6, 0.6, 0.6, 1])
     actividad_seleccionada = StringProperty("Seleccionar actividad...")
+    texto_estado_jornada   = StringProperty("JORNADA ABIERTA")
+    color_estado_jornada   = ListProperty([0.18, 0.42, 0.18, 1])
 
     def actualizar_lista_ui(self, trabajadores: dict):
         self.ids.lista_trabajadores.clear_widgets()
@@ -872,12 +894,12 @@ class PantallaAsistencia(Screen):
             icono = IconLeftWidget(
                 icon="check-circle" if validado else "wifi",
                 theme_text_color="Custom",
-                icon_color=(0.18, 0.29, 0.12, 1) if validado else (0.96, 0.65, 0.14, 1)
+                icon_color=(0.18, 0.42, 0.18, 1) if validado else (0.96, 0.65, 0.14, 1)
             )
             item = TwoLineIconListItem(
                 text=f"[b]{nombre}[/b]  |  No. {credencial}",
                 secondary_text=(
-                    f"{hora}  |  {'VALIDADO' if validado else 'Pendiente'}"
+                    f"{hora}  |  {'✓ VALIDADO' if validado else 'Pendiente'}"
                     + (f"  |  {gps_txt}" if gps_txt else "")
                 ),
             )
@@ -926,7 +948,7 @@ class PantallaBuscadorActividad(Screen):
         resultados = [
             (clave, desc) for clave, desc in ACTIVIDADES
             if txt in desc.upper() or txt in clave
-        ] if txt else ACTIVIDADES[:50]
+        ] if txt else ACTIVIDADES[:60]
 
         for clave, desc in resultados:
             item = OneLineListItem(
@@ -949,11 +971,11 @@ class PantallaResumen(Screen):
     def construir_resumen(self, trabajadores, cuadrillero, cuadrilla, cuadro, actividad):
         presentes = sum(1 for v in trabajadores.values() if v.get('validado'))
         total     = len(trabajadores)
-        fecha     = datetime.datetime.now().strftime("%d/%m/%Y")
+        fecha     = datetime.datetime.now().strftime("%d/%m/%Y  %H:%M")
         self.resumen_texto = (
-            f"Cuadrilla {cuadrilla} | {cuadro}\n"
-            f"Actividad: {actividad}\n"
-            f"{cuadrillero}  |  {fecha}\n"
+            f"Cuadrilla {cuadrilla}  |  Cuadro: {cuadro}\n"
+            f"Act: {actividad}\n"
+            f"{cuadrillero.replace(chr(10), ' ')}  |  {fecha}\n"
             f"Presentes: {presentes} / {total}"
         )
         self.ids.lista_resumen.clear_widgets()
@@ -962,10 +984,10 @@ class PantallaResumen(Screen):
             icono = IconLeftWidget(
                 icon="check" if validado else "close",
                 theme_text_color="Custom",
-                icon_color=(0.18, 0.29, 0.12, 1) if validado else (0.72, 0.10, 0.10, 1)
+                icon_color=(0.18, 0.42, 0.18, 1) if validado else (0.72, 0.10, 0.10, 1)
             )
             item = TwoLineIconListItem(
-                text=f"Cred. {cred}  —  {info.get('nombre', '')}",
+                text=f"Cred. {cred}  —  {info.get('nombre', '').replace(chr(10), ' ')}",
                 secondary_text=(
                     info.get('hora_deteccion', '--') +
                     ('  ✓ PRESENTE' if validado else '  ✗ AUSENTE')
@@ -974,11 +996,12 @@ class PantallaResumen(Screen):
             item.add_widget(icono)
             self.ids.lista_resumen.add_widget(item)
 
-    def guardar_lista_dia(self):
+    def guardar_y_cerrar_jornada(self):
         app   = MDApp.get_running_app()
         fecha = datetime.datetime.now().strftime("%Y-%m-%d")
         datos = {
             "fecha":        fecha,
+            "hora_cierre":  datetime.datetime.now().strftime("%H:%M:%S"),
             "cuadrillero":  app.nombre_cuadrillero,
             "cuadrilla":    app.num_cuadrilla,
             "cuadro":       app.cuadro_trabajo,
@@ -986,7 +1009,23 @@ class PantallaResumen(Screen):
             "trabajadores": app.trabajadores_detectados
         }
         guardar_lista(datos)
-        Snackbar(text="Lista guardada correctamente").open()
+
+        # Cerrar jornada y empezar a emitir al apuntador
+        app.jornada_cerrada = True
+        app.iniciar_anuncio_apuntador()
+
+        # Actualizar UI de asistencia
+        pa = app.root.get_screen('asistencia')
+        pa.texto_estado_jornada = "JORNADA CERRADA — Emitiendo al apuntador"
+        pa.color_estado_jornada = [0.65, 0.08, 0.08, 1]
+        pa.estado_escucha       = "Cerrado"
+        pa.color_estado_escucha = [0.65, 0.08, 0.08, 1]
+
+        # Detener escucha de nuevos trabajadores
+        app._escucha_activa = False
+
+        app.root.current = 'asistencia'
+        Snackbar(text="Lista guardada. Emitiendo señal al apuntador.").open()
 
 
 class CuadrilleroAgriCactusApp(MDApp):
@@ -997,6 +1036,7 @@ class CuadrilleroAgriCactusApp(MDApp):
     trabajadores_detectados = {}
     _escucha_activa         = False
     _anuncio_activo         = False
+    jornada_cerrada         = False
 
     def build(self):
         self.theme_cls.theme_style     = "Light"
@@ -1027,7 +1067,7 @@ class CuadrilleroAgriCactusApp(MDApp):
 
         pa = self.root.get_screen('asistencia')
         pa.estado_escucha       = "Activo"
-        pa.color_estado_escucha = [0.18, 0.29, 0.12, 1]
+        pa.color_estado_escucha = [0.18, 0.42, 0.18, 1]
 
         def _escuchar():
             try:
@@ -1043,7 +1083,6 @@ class CuadrilleroAgriCactusApp(MDApp):
                             mensaje = datos_raw.decode('utf-8').strip()
                             partes  = mensaje.split(':')
 
-                            # Formato: PRESENTE:<cred>:<cuadrilla>:<nombre>:<lat>:<lon>
                             if len(partes) >= 4 and partes[0] == 'PRESENTE':
                                 credencial = partes[1]
                                 cuadrilla  = partes[2]
@@ -1054,8 +1093,8 @@ class CuadrilleroAgriCactusApp(MDApp):
                                 if cuadrilla != str(self.num_cuadrilla):
                                     continue
 
-                                ahora  = datetime.datetime.now().strftime("%H:%M:%S")
-                                ip     = addr[0]
+                                ahora   = datetime.datetime.now().strftime("%H:%M:%S")
+                                ip      = addr[0]
                                 gps_txt = f"{lat},{lon}" if lat != "0" else ""
 
                                 if credencial not in self.trabajadores_detectados:
@@ -1127,14 +1166,10 @@ class CuadrilleroAgriCactusApp(MDApp):
             self.trabajadores_detectados[credencial]['hora_validacion'] = \
                 datetime.datetime.now().strftime("%H:%M:%S")
         self._actualizar_ui()
-        Snackbar(text=f"Cred. {credencial} validado").open()
+        Snackbar(text=f"✓ Cred. {credencial} validado").open()
 
-    # ── Anuncio al apuntador ──────────────────────────────────────────────────
+    # ── Anuncio al apuntador (solo después de cerrar jornada) ─────────────────
     def iniciar_anuncio_apuntador(self):
-        """
-        Emite broadcast cada 30s para que el apuntador detecte este cuadrillero.
-        Formato: CUADRILLERO:<cuadrilla>:<nombre>
-        """
         if self._anuncio_activo:
             return
         self._anuncio_activo = True
@@ -1153,12 +1188,11 @@ class CuadrilleroAgriCactusApp(MDApp):
                         )
                     print(f"[WIFI] Anuncio apuntador: {mensaje}")
                 except Exception as e:
-                    print(f"[WIFI] Error anuncio apuntador: {e}")
+                    print(f"[WIFI] Error anuncio: {e}")
                 time.sleep(INTERVALO_ANUNCIO)
 
         threading.Thread(target=_anunciar, daemon=True).start()
 
-    # ── Responder al apuntador (peticion de lista) ────────────────────────────
     def iniciar_respuesta_apuntador(self):
         def _escuchar():
             try:
@@ -1192,6 +1226,8 @@ class CuadrilleroAgriCactusApp(MDApp):
             "cuadro":       self.cuadro_trabajo,
             "actividad":    self.actividad_trabajo,
             "fecha":        datetime.datetime.now().strftime("%Y-%m-%d"),
+            "hora_cierre":  datetime.datetime.now().strftime("%H:%M:%S"),
+            "jornada_cerrada": self.jornada_cerrada,
             "trabajadores": self.trabajadores_detectados
         }
         try:
