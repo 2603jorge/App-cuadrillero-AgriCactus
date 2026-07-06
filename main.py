@@ -1,6 +1,6 @@
 # =============================================================================
 #  AgriCactus - App del CUADRILLERO  (main.py)
-#  v3.6 - Fix crash Android: error capture + FitImage + permisos almacenamiento
+#  v3.6 - Fix deteccion WiFi (multicast lock) + sin comida + busqueda RH + rediseno
 # =============================================================================
 
 import datetime
@@ -8,17 +8,15 @@ import json
 import os
 import socket
 import threading
-import traceback
+import time
 
 from kivy.lang import Builder
 from kivy.clock import Clock
 from kivy.properties import StringProperty, BooleanProperty, ListProperty
 from kivy.uix.screenmanager import Screen, FadeTransition
-from kivy.uix.floatlayout import FloatLayout
 from kivy.utils import platform
 from kivymd.app import MDApp
 from kivymd.uix.snackbar import Snackbar
-from kivymd.uix.label import MDLabel
 from kivymd.uix.list import TwoLineIconListItem, IconLeftWidget, OneLineListItem
 
 ACTIVIDADES = [
@@ -100,77 +98,43 @@ PUERTO_RECEPCION   = 45681
 PUERTO_ANUNCIO_CU  = 45682
 INTERVALO_ANUNCIO  = 30
 
+# Consulta al servidor de empleados (misma laptop/servicio que usa el Trabajador)
+PUERTO_CONSULTA_EMP     = 45690
+TIMEOUT_CONSULTA_EMP    = 3.0
+REINTENTOS_CONSULTA_EMP = 3
+
 PERIODO_ENTRADA = "entrada"
-PERIODO_COMIDA  = "salida_comida"
-PERIODO_REGRESO = "regreso_comida"
 PERIODO_CAMBIO  = "cambio_cuadro"
 PERIODO_SALIDA  = "salida_final"
 
 
-def _ruta_archivo(nombre):
-    """
-    En Android devuelve la ruta dentro del directorio privado de la app
-    para no necesitar permisos de almacenamiento externo.
-    En escritorio devuelve el nombre tal cual (directorio actual).
-    """
-    if platform == 'android':
-        try:
-            from android.storage import app_storage_path
-            return os.path.join(app_storage_path(), nombre)
-        except Exception:
-            pass
-    return nombre
-
-
 def guardar_datos(datos: dict):
     try:
-        ruta = _ruta_archivo(ARCHIVO_DATOS)
-        with open(ruta, 'w', encoding='utf-8') as f:
+        with open(ARCHIVO_DATOS, 'w', encoding='utf-8') as f:
             json.dump(datos, f, ensure_ascii=False, indent=2)
     except Exception as e:
-        print(f"[STORAGE] Error guardar_datos: {e}")
+        print(f"[STORAGE] Error: {e}")
 
 def cargar_datos() -> dict:
-    try:
-        ruta = _ruta_archivo(ARCHIVO_DATOS)
-        if os.path.exists(ruta):
-            with open(ruta, 'r', encoding='utf-8') as f:
+    if os.path.exists(ARCHIVO_DATOS):
+        try:
+            with open(ARCHIVO_DATOS, 'r', encoding='utf-8') as f:
                 return json.load(f)
-    except Exception as e:
-        print(f"[STORAGE] Error cargar_datos: {e}")
+        except Exception:
+            pass
     return {}
 
 def guardar_lista(datos: dict):
     try:
-        ruta = _ruta_archivo(ARCHIVO_LISTA)
-        with open(ruta, 'w', encoding='utf-8') as f:
+        with open(ARCHIVO_LISTA, 'w', encoding='utf-8') as f:
             json.dump(datos, f, ensure_ascii=False, indent=2)
     except Exception as e:
-        print(f"[STORAGE] Error guardar_lista: {e}")
+        print(f"[STORAGE] Error lista: {e}")
 
 
-# ---------------------------------------------------------------------------
-#  FitImage segura: usa AsyncImage si FitImage no está disponible en la versión
-#  de KivyMD instalada.
-# ---------------------------------------------------------------------------
-try:
-    from kivymd.uix.fitimage import FitImage as _FitImage          # KivyMD >= 1.x
-    _FIT_IMAGE_CLASS = "FitImage"
-    _FIT_IMAGE_IMPORT = "#:import FitImage kivymd.uix.fitimage.FitImage"
-except ImportError:
-    try:
-        from kivymd.uix.fitimage.fitimage import FitImage as _FitImage  # algunas builds
-        _FIT_IMAGE_CLASS = "FitImage"
-        _FIT_IMAGE_IMPORT = "#:import FitImage kivymd.uix.fitimage.fitimage.FitImage"
-    except ImportError:
-        from kivy.uix.image import AsyncImage as _FitImage         # fallback seguro
-        _FIT_IMAGE_CLASS = "AsyncImage"
-        _FIT_IMAGE_IMPORT = "#:import AsyncImage kivy.uix.image.AsyncImage"
-
-
-KV = f'''
+KV = '''
 #:import FadeTransition kivy.uix.screenmanager.FadeTransition
-{_FIT_IMAGE_IMPORT}
+#:import FitImage kivymd.uix.fitimage.FitImage
 
 ScreenManager:
     transition: FadeTransition()
@@ -189,7 +153,7 @@ ScreenManager:
 
         MDFloatLayout:
             size_hint_y: 0.15
-            pos_hint: {{'x': 0, 'top': 1}}
+            pos_hint: {'x': 0, 'top': 1}
             md_bg_color: 0.18, 0.29, 0.12, 1
 
             Image:
@@ -197,7 +161,7 @@ ScreenManager:
                 size_hint: (0.38, 0.80)
                 allow_stretch: True
                 keep_ratio: True
-                pos_hint: {{'center_x': 0.22, 'center_y': 0.5}}
+                pos_hint: {'center_x': 0.22, 'center_y': 0.5}
 
             MDLabel:
                 text: "REGISTRO CUADRILLERO"
@@ -206,12 +170,12 @@ ScreenManager:
                 halign: "center"
                 theme_text_color: "Custom"
                 text_color: 1, 1, 1, 1
-                pos_hint: {{'center_x': 0.64, 'center_y': 0.5}}
+                pos_hint: {'center_x': 0.64, 'center_y': 0.5}
                 size_hint: (0.6, 1)
 
         MDBoxLayout:
             size_hint_y: 0.006
-            pos_hint: {{'x': 0, 'top': 0.85}}
+            pos_hint: {'x': 0, 'top': 0.85}
             md_bg_color: 0.96, 0.65, 0.14, 1
 
         MDTextField:
@@ -220,7 +184,7 @@ ScreenManager:
             helper_text: "Se convertira a MAYUSCULAS"
             helper_text_mode: "on_focus"
             line_color_focus: 0.18, 0.29, 0.12, 1
-            pos_hint: {{'center_x': 0.5, 'center_y': 0.76}}
+            pos_hint: {'center_x': 0.5, 'center_y': 0.78}
             size_hint_x: 0.88
 
         MDTextField:
@@ -229,15 +193,41 @@ ScreenManager:
             max_text_length: 11
             input_filter: "int"
             line_color_focus: 0.18, 0.29, 0.12, 1
-            pos_hint: {{'center_x': 0.5, 'center_y': 0.65}}
+            pos_hint: {'center_x': 0.5, 'center_y': 0.68}
             size_hint_x: 0.88
 
-        MDTextField:
-            id: input_credencial
-            hint_text: "Numero de Credencial / Empleado"
-            input_filter: "int"
-            line_color_focus: 0.18, 0.29, 0.12, 1
-            pos_hint: {{'center_x': 0.5, 'center_y': 0.55}}
+        MDBoxLayout:
+            orientation: 'horizontal'
+            size_hint: (0.88, 0.07)
+            pos_hint: {'center_x': 0.5, 'center_y': 0.575}
+            spacing: '6dp'
+
+            MDTextField:
+                id: input_credencial
+                hint_text: "Numero de Credencial / Empleado"
+                input_filter: "int"
+                line_color_focus: 0.18, 0.29, 0.12, 1
+                size_hint_x: 0.68
+                on_text_validate: root.buscar_datos_empleado()
+
+            MDRectangleFlatIconButton:
+                icon: "magnify"
+                text: "BUSCAR"
+                theme_text_color: "Custom"
+                text_color: 0.18, 0.29, 0.12, 1
+                line_color: 0.18, 0.29, 0.12, 1
+                size_hint_x: 0.32
+                pos_hint: {'center_y': 0.4}
+                on_release: root.buscar_datos_empleado()
+
+        MDLabel:
+            id: label_busqueda
+            text: ""
+            font_style: "Caption"
+            halign: "center"
+            theme_text_color: "Custom"
+            text_color: 0.5, 0.5, 0.5, 1
+            pos_hint: {'center_x': 0.5, 'center_y': 0.525}
             size_hint_x: 0.88
 
         MDTextField:
@@ -245,13 +235,13 @@ ScreenManager:
             hint_text: "Numero de Cuadrilla a cargo"
             input_filter: "int"
             line_color_focus: 0.18, 0.29, 0.12, 1
-            pos_hint: {{'center_x': 0.5, 'center_y': 0.45}}
+            pos_hint: {'center_x': 0.5, 'center_y': 0.44}
             size_hint_x: 0.88
 
         MDBoxLayout:
             orientation: 'horizontal'
             size_hint: (0.88, 0.07)
-            pos_hint: {{'center_x': 0.5, 'center_y': 0.35}}
+            pos_hint: {'center_x': 0.5, 'center_y': 0.34}
             spacing: '8dp'
 
             MDRectangleFlatIconButton:
@@ -279,12 +269,12 @@ ScreenManager:
             halign: "center"
             theme_text_color: "Custom"
             text_color: 0.5, 0.5, 0.5, 1
-            pos_hint: {{'center_x': 0.5, 'center_y': 0.26}}
+            pos_hint: {'center_x': 0.5, 'center_y': 0.26}
 
         MDRaisedButton:
             text: "GENERAR CREDENCIAL DIGITAL"
             md_bg_color: 0.18, 0.29, 0.12, 1
-            pos_hint: {{'center_x': 0.5, 'center_y': 0.14}}
+            pos_hint: {'center_x': 0.5, 'center_y': 0.13}
             size_hint_x: 0.88
             elevation: 4
             on_release: root.guardar_registro()
@@ -298,21 +288,21 @@ ScreenManager:
 
         MDFloatLayout:
             size_hint_x: 0.06
-            pos_hint: {{'x': 0, 'y': 0}}
+            pos_hint: {'x': 0, 'y': 0}
             md_bg_color: 0.18, 0.29, 0.12, 1
 
         MDCard:
             size_hint: (0.92, 0.76)
-            pos_hint: {{'right': 0.99, 'top': 0.97}}
-            elevation: 4
-            radius: [16, 16, 16, 16]
+            pos_hint: {'right': 0.99, 'top': 0.97}
+            elevation: 6
+            radius: [18, 18, 18, 18]
             md_bg_color: 1, 1, 1, 1
 
             MDFloatLayout:
 
                 MDFloatLayout:
                     size_hint_y: 0.20
-                    pos_hint: {{'x': 0, 'top': 1}}
+                    pos_hint: {'x': 0, 'top': 1}
                     md_bg_color: 0.18, 0.29, 0.12, 1
 
                     Image:
@@ -320,7 +310,7 @@ ScreenManager:
                         size_hint: (0.44, 0.80)
                         allow_stretch: True
                         keep_ratio: True
-                        pos_hint: {{'center_x': 0.26, 'center_y': 0.5}}
+                        pos_hint: {'center_x': 0.26, 'center_y': 0.5}
 
                     MDLabel:
                         text: "CUADRILLERO"
@@ -329,7 +319,7 @@ ScreenManager:
                         halign: "center"
                         theme_text_color: "Custom"
                         text_color: 0.96, 0.65, 0.14, 1
-                        pos_hint: {{'center_x': 0.72, 'center_y': 0.65}}
+                        pos_hint: {'center_x': 0.72, 'center_y': 0.65}
                         size_hint: (0.52, 0.22)
 
                     MDLabel:
@@ -338,18 +328,18 @@ ScreenManager:
                         halign: "center"
                         theme_text_color: "Custom"
                         text_color: 0.78, 0.92, 0.78, 1
-                        pos_hint: {{'center_x': 0.72, 'center_y': 0.32}}
+                        pos_hint: {'center_x': 0.72, 'center_y': 0.32}
                         size_hint: (0.52, 0.22)
 
                 MDBoxLayout:
                     size_hint: (1, 0.004)
-                    pos_hint: {{'x': 0, 'top': 0.80}}
+                    pos_hint: {'x': 0, 'top': 0.80}
                     md_bg_color: 0.96, 0.65, 0.14, 1
 
-                {_FIT_IMAGE_CLASS}:
+                FitImage:
                     source: root.ruta_foto
                     size_hint: (0.28, 0.34)
-                    pos_hint: {{'x': 0.04, 'top': 0.78}}
+                    pos_hint: {'x': 0.04, 'top': 0.78}
                     radius: [10, 10, 10, 10]
 
                 MDLabel:
@@ -362,7 +352,7 @@ ScreenManager:
                     theme_text_color: "Custom"
                     text_color: 0.12, 0.22, 0.08, 1
                     text_size: self.size
-                    pos_hint: {{'x': 0.36, 'top': 0.78}}
+                    pos_hint: {'x': 0.36, 'top': 0.78}
                     size_hint: (0.60, 0.14)
 
                 MDLabel:
@@ -370,7 +360,7 @@ ScreenManager:
                     font_style: "Caption"
                     halign: "left"
                     theme_text_color: "Secondary"
-                    pos_hint: {{'x': 0.36, 'top': 0.64}}
+                    pos_hint: {'x': 0.36, 'top': 0.64}
                     size_hint: (0.60, 0.05)
 
                 MDLabel:
@@ -380,7 +370,7 @@ ScreenManager:
                     halign: "left"
                     theme_text_color: "Custom"
                     text_color: 0.18, 0.42, 0.18, 1
-                    pos_hint: {{'x': 0.36, 'top': 0.59}}
+                    pos_hint: {'x': 0.36, 'top': 0.59}
                     size_hint: (0.60, 0.05)
 
                 MDLabel:
@@ -389,12 +379,12 @@ ScreenManager:
                     halign: "left"
                     theme_text_color: "Custom"
                     text_color: 0.4, 0.4, 0.4, 1
-                    pos_hint: {{'x': 0.36, 'top': 0.54}}
+                    pos_hint: {'x': 0.36, 'top': 0.54}
                     size_hint: (0.60, 0.05)
 
                 MDBoxLayout:
                     size_hint: (0.90, 0.004)
-                    pos_hint: {{'center_x': 0.5, 'top': 0.48}}
+                    pos_hint: {'center_x': 0.5, 'top': 0.48}
                     md_bg_color: 0.96, 0.65, 0.14, 1
 
                 MDLabel:
@@ -404,12 +394,12 @@ ScreenManager:
                     halign: "center"
                     theme_text_color: "Custom"
                     text_color: 0.12, 0.22, 0.08, 1
-                    pos_hint: {{'center_x': 0.5, 'top': 0.47}}
+                    pos_hint: {'center_x': 0.5, 'top': 0.47}
                     size_hint: (0.88, 0.10)
 
                 MDFloatLayout:
                     size_hint_y: 0.05
-                    pos_hint: {{'x': 0, 'y': 0}}
+                    pos_hint: {'x': 0, 'y': 0}
                     md_bg_color: 0.18, 0.29, 0.12, 1
                     MDLabel:
                         text: "Blvd. Kino 309, Piso 6 - Hermosillo, Sonora"
@@ -421,9 +411,9 @@ ScreenManager:
         MDRaisedButton:
             text: "INICIAR JORNADA"
             md_bg_color: 0.18, 0.29, 0.12, 1
-            pos_hint: {{'center_x': 0.55, 'y': 0.13}}
+            pos_hint: {'center_x': 0.55, 'y': 0.13}
             size_hint: (0.80, 0.07)
-            elevation: 4
+            elevation: 5
             on_release: root.ir_a_asistencia()
 
         MDRectangleFlatButton:
@@ -431,7 +421,7 @@ ScreenManager:
             theme_text_color: "Custom"
             text_color: 0.18, 0.29, 0.12, 1
             line_color: 0.18, 0.29, 0.12, 1
-            pos_hint: {{'center_x': 0.55, 'y': 0.05}}
+            pos_hint: {'center_x': 0.55, 'y': 0.05}
             size_hint: (0.80, 0.07)
             on_release: app.root.current = 'registro'
 
@@ -444,7 +434,7 @@ ScreenManager:
 
         MDFloatLayout:
             size_hint_y: 0.12
-            pos_hint: {{'x': 0, 'top': 1}}
+            pos_hint: {'x': 0, 'top': 1}
             md_bg_color: 0.18, 0.29, 0.12, 1
 
             Image:
@@ -452,7 +442,7 @@ ScreenManager:
                 size_hint: (0.24, 0.76)
                 allow_stretch: True
                 keep_ratio: True
-                pos_hint: {{'center_x': 0.14, 'center_y': 0.5}}
+                pos_hint: {'center_x': 0.14, 'center_y': 0.5}
 
             MDLabel:
                 text: root.titulo_sesion
@@ -461,7 +451,7 @@ ScreenManager:
                 halign: "center"
                 theme_text_color: "Custom"
                 text_color: 1, 1, 1, 1
-                pos_hint: {{'center_x': 0.58, 'center_y': 0.62}}
+                pos_hint: {'center_x': 0.58, 'center_y': 0.62}
                 size_hint: (0.68, 0.38)
 
             MDLabel:
@@ -470,17 +460,17 @@ ScreenManager:
                 halign: "center"
                 theme_text_color: "Custom"
                 text_color: 0.96, 0.65, 0.14, 1
-                pos_hint: {{'center_x': 0.58, 'center_y': 0.26}}
+                pos_hint: {'center_x': 0.58, 'center_y': 0.26}
                 size_hint: (0.68, 0.28)
 
         MDBoxLayout:
             size_hint_y: 0.004
-            pos_hint: {{'x': 0, 'top': 0.88}}
+            pos_hint: {'x': 0, 'top': 0.88}
             md_bg_color: 0.96, 0.65, 0.14, 1
 
         MDCard:
-            size_hint: (0.96, 0.055)
-            pos_hint: {{'center_x': 0.5, 'top': 0.875}}
+            size_hint: (0.96, 0.05)
+            pos_hint: {'center_x': 0.5, 'top': 0.87}
             elevation: 1
             radius: [8, 8, 8, 8]
             md_bg_color: root.color_estado_jornada
@@ -495,9 +485,8 @@ ScreenManager:
 
         MDBoxLayout:
             orientation: 'horizontal'
-            size_hint: (0.96, None)
-            height: '44dp'
-            pos_hint: {{'center_x': 0.5, 'top': 0.818}}
+            size_hint: (0.96, 0.06)
+            pos_hint: {'center_x': 0.5, 'top': 0.805}
             spacing: '6dp'
 
             MDTextField:
@@ -516,16 +505,16 @@ ScreenManager:
                 on_release: app.root.current = 'buscador'
 
         MDCard:
-            size_hint: (0.96, 0.09)
-            pos_hint: {{'center_x': 0.5, 'top': 0.73}}
-            elevation: 2
-            radius: [10, 10, 10, 10]
+            size_hint: (0.96, 0.10)
+            pos_hint: {'center_x': 0.5, 'top': 0.73}
+            elevation: 3
+            radius: [12, 12, 12, 12]
             md_bg_color: 1, 1, 1, 1
 
             MDBoxLayout:
                 orientation: 'horizontal'
-                padding: '6dp'
-                spacing: '2dp'
+                padding: '8dp'
+                spacing: '4dp'
 
                 MDBoxLayout:
                     orientation: 'vertical'
@@ -589,9 +578,9 @@ ScreenManager:
 
         MDCard:
             size_hint: (0.96, 0.32)
-            pos_hint: {{'center_x': 0.5, 'top': 0.64}}
-            elevation: 2
-            radius: [10, 10, 10, 10]
+            pos_hint: {'center_x': 0.5, 'top': 0.615}
+            elevation: 3
+            radius: [12, 12, 12, 12]
             md_bg_color: 1, 1, 1, 1
 
             MDBoxLayout:
@@ -614,49 +603,37 @@ ScreenManager:
 
         MDBoxLayout:
             orientation: 'horizontal'
-            size_hint: (0.96, 0.07)
-            pos_hint: {{'center_x': 0.5, 'top': 0.31}}
-            spacing: '4dp'
+            size_hint: (0.96, 0.075)
+            pos_hint: {'center_x': 0.5, 'top': 0.28}
+            spacing: '10dp'
 
             MDRaisedButton:
-                text: "VALIDAR\\nENTRADA"
+                text: "VALIDAR ENTRADA"
                 md_bg_color: 0.18, 0.42, 0.18, 1
-                size_hint_x: 0.25
-                font_size: '10sp'
+                size_hint_x: 0.5
+                font_size: '13sp'
+                elevation: 3
                 on_release: root.accion_periodo('entrada')
 
             MDRaisedButton:
-                text: "SALIDA\\nCOMIDA"
-                md_bg_color: 0.96, 0.65, 0.14, 1
-                text_color: 0.12, 0.22, 0.08, 1
-                size_hint_x: 0.25
-                font_size: '10sp'
-                on_release: root.accion_periodo('salida_comida')
-
-            MDRaisedButton:
-                text: "REGRESO\\nCOMIDA"
-                md_bg_color: 0.18, 0.29, 0.55, 1
-                size_hint_x: 0.25
-                font_size: '10sp'
-                on_release: root.accion_periodo('regreso_comida')
-
-            MDRaisedButton:
-                text: "CAMBIO\\nCUADRO"
+                text: "CAMBIO DE CUADRO"
                 md_bg_color: 0.55, 0.18, 0.55, 1
-                size_hint_x: 0.25
-                font_size: '10sp'
+                size_hint_x: 0.5
+                font_size: '13sp'
+                elevation: 3
                 on_release: root.accion_periodo('cambio_cuadro')
 
         MDBoxLayout:
             orientation: 'horizontal'
-            size_hint: (0.96, 0.07)
-            pos_hint: {{'center_x': 0.5, 'top': 0.23}}
+            size_hint: (0.96, 0.065)
+            pos_hint: {'center_x': 0.5, 'top': 0.193}
             spacing: '6dp'
 
             MDRaisedButton:
                 text: "VALIDAR TODOS"
                 md_bg_color: 0.18, 0.29, 0.12, 1
                 size_hint_x: 0.5
+                elevation: 2
                 on_release: root.validar_todos()
 
             MDRaisedButton:
@@ -664,6 +641,7 @@ ScreenManager:
                 md_bg_color: 0.96, 0.65, 0.14, 1
                 text_color: 0.12, 0.22, 0.08, 1
                 size_hint_x: 0.5
+                elevation: 2
                 on_release: root.ver_resumen()
 
         MDRectangleFlatButton:
@@ -671,8 +649,8 @@ ScreenManager:
             theme_text_color: "Custom"
             text_color: 0.18, 0.29, 0.12, 1
             line_color: 0.18, 0.29, 0.12, 1
-            size_hint: (0.96, 0.07)
-            pos_hint: {{'center_x': 0.5, 'y': 0.01}}
+            size_hint: (0.96, 0.065)
+            pos_hint: {'center_x': 0.5, 'top': 0.116}
             on_release: app.root.current = 'credencial'
 
 
@@ -684,7 +662,7 @@ ScreenManager:
 
         MDFloatLayout:
             size_hint_y: 0.13
-            pos_hint: {{'x': 0, 'top': 1}}
+            pos_hint: {'x': 0, 'top': 1}
             md_bg_color: 0.18, 0.29, 0.12, 1
 
             MDLabel:
@@ -694,26 +672,26 @@ ScreenManager:
                 halign: "center"
                 theme_text_color: "Custom"
                 text_color: 0.96, 0.65, 0.14, 1
-                pos_hint: {{'center_x': 0.5, 'center_y': 0.5}}
+                pos_hint: {'center_x': 0.5, 'center_y': 0.5}
                 size_hint: (1, 1)
 
         MDBoxLayout:
             size_hint_y: 0.004
-            pos_hint: {{'x': 0, 'top': 0.87}}
+            pos_hint: {'x': 0, 'top': 0.87}
             md_bg_color: 0.96, 0.65, 0.14, 1
 
         MDTextField:
             id: input_buscar
             hint_text: "Buscar por nombre o clave..."
             line_color_focus: 0.18, 0.29, 0.12, 1
-            pos_hint: {{'center_x': 0.5, 'top': 0.85}}
+            pos_hint: {'center_x': 0.5, 'top': 0.85}
             size_hint: (0.96, None)
             height: '48dp'
             on_text: root.filtrar_actividades(self.text)
 
         ScrollView:
             size_hint: (0.96, 0.68)
-            pos_hint: {{'center_x': 0.5, 'top': 0.76}}
+            pos_hint: {'center_x': 0.5, 'top': 0.76}
             MDList:
                 id: lista_actividades
 
@@ -721,7 +699,7 @@ ScreenManager:
             text: "CANCELAR"
             md_bg_color: 0.65, 0.08, 0.08, 1
             size_hint: (0.96, 0.07)
-            pos_hint: {{'center_x': 0.5, 'y': 0.01}}
+            pos_hint: {'center_x': 0.5, 'y': 0.01}
             on_release: app.root.current = 'asistencia'
 
 
@@ -733,7 +711,7 @@ ScreenManager:
 
         MDFloatLayout:
             size_hint_y: 0.12
-            pos_hint: {{'x': 0, 'top': 1}}
+            pos_hint: {'x': 0, 'top': 1}
             md_bg_color: 0.18, 0.29, 0.12, 1
 
             MDLabel:
@@ -743,17 +721,17 @@ ScreenManager:
                 halign: "center"
                 theme_text_color: "Custom"
                 text_color: 0.96, 0.65, 0.14, 1
-                pos_hint: {{'center_x': 0.5, 'center_y': 0.5}}
+                pos_hint: {'center_x': 0.5, 'center_y': 0.5}
                 size_hint: (1, 1)
 
         MDBoxLayout:
             size_hint_y: 0.004
-            pos_hint: {{'x': 0, 'top': 0.88}}
+            pos_hint: {'x': 0, 'top': 0.88}
             md_bg_color: 0.96, 0.65, 0.14, 1
 
         MDCard:
             size_hint: (0.96, 0.72)
-            pos_hint: {{'center_x': 0.5, 'top': 0.875}}
+            pos_hint: {'center_x': 0.5, 'top': 0.875}
             elevation: 3
             radius: [12, 12, 12, 12]
             md_bg_color: 1, 1, 1, 1
@@ -779,7 +757,7 @@ ScreenManager:
         MDBoxLayout:
             orientation: 'horizontal'
             size_hint: (0.96, 0.08)
-            pos_hint: {{'center_x': 0.5, 'y': 0.01}}
+            pos_hint: {'center_x': 0.5, 'y': 0.01}
             spacing: '6dp'
 
             MDRaisedButton:
@@ -827,7 +805,7 @@ class PantallaRegistro(Screen):
                 PythonActivity.mActivity.startActivityForResult(intent, 1001)
                 android_activity.bind(on_activity_result=self._resultado_camara)
             except Exception as e:
-                self.ids.label_foto.text = f"Error camara: {e}"
+                self.ids.label_foto.text = f"Error: {e}"
 
     def _resultado_camara(self, requestCode, resultCode, intent):
         RESULT_OK = -1
@@ -848,7 +826,7 @@ class PantallaRegistro(Screen):
             self.ruta_foto_seleccionada = ruta
             self.ids.label_foto.text    = "Foto tomada"
         except Exception as e:
-            self.ids.label_foto.text = f"Error camara: {e}"
+            self.ids.label_foto.text = f"Error: {e}"
 
     def abrir_galeria(self):
         try:
@@ -859,12 +837,44 @@ class PantallaRegistro(Screen):
                 on_selection=self.al_seleccionar_foto
             )
         except Exception as e:
-            self.ids.label_foto.text = f"Error galeria: {e}"
+            self.ids.label_foto.text = f"Error: {e}"
 
     def al_seleccionar_foto(self, seleccion):
         if seleccion:
             self.ruta_foto_seleccionada = seleccion[0]
             self.ids.label_foto.text    = f"OK: {os.path.basename(seleccion[0])}"
+
+    # ── Consulta al servidor de empleados (empleados_server.py) ──────────────
+    def buscar_datos_empleado(self):
+        credencial = self.ids.input_credencial.text.strip()
+        if not credencial:
+            Snackbar(text="Escribe primero el numero de credencial").open()
+            return
+
+        self.ids.label_busqueda.text       = "Buscando en la red..."
+        self.ids.label_busqueda.text_color = (0.5, 0.5, 0.5, 1)
+
+        app = MDApp.get_running_app()
+        app.buscar_empleado_red(
+            credencial,
+            callback_ok=self._al_encontrar_empleado,
+            callback_error=self._al_fallar_busqueda,
+        )
+
+    def _al_encontrar_empleado(self, datos: dict):
+        self.ids.input_nombre.text = datos.get("nombre", "")
+        self.ids.input_nss.text    = datos.get("nss", "")
+        if datos.get("cuadrilla"):
+            self.ids.input_cuadrilla.text = datos.get("cuadrilla", "")
+
+        self.ids.label_busqueda.text       = f"✓ Encontrado: {datos.get('nombre', '')}"
+        self.ids.label_busqueda.text_color = (0.18, 0.42, 0.18, 1)
+        Snackbar(text="Datos cargados desde RH").open()
+
+    def _al_fallar_busqueda(self, mensaje: str):
+        self.ids.label_busqueda.text       = mensaje
+        self.ids.label_busqueda.text_color = (0.7, 0.2, 0.15, 1)
+        Snackbar(text=mensaje).open()
 
     def guardar_registro(self):
         nombre     = self.ids.input_nombre.text.strip().upper()
@@ -932,6 +942,7 @@ class PantallaCredencial(Screen):
         pa.fecha_hoy     = datetime.datetime.now().strftime("%d/%m/%Y  %H:%M")
         app.iniciar_escucha_trabajadores()
         app.iniciar_respuesta_apuntador()
+        app.iniciar_anuncio_apuntador()
         app.root.current = 'asistencia'
         Snackbar(text="Jornada iniciada").open()
 
@@ -1004,23 +1015,9 @@ class PantallaAsistencia(Screen):
         self.total_fijos      = str(fijos)
 
     def accion_periodo(self, tipo: str):
-        app      = MDApp.get_running_app()
-        cuadro   = self.ids.input_cuadro.text.strip().upper() or "SIN CUADRO"
+        app       = MDApp.get_running_app()
+        cuadro    = self.ids.input_cuadro.text.strip().upper() or "SIN CUADRO"
         actividad = self.actividad_seleccionada
-        ahora    = datetime.datetime.now().strftime("%H:%M:%S")
-
-        if tipo == PERIODO_COMIDA:
-            for cred in app.trabajadores_detectados:
-                if app.trabajadores_detectados[cred].get('validado'):
-                    app.trabajadores_detectados[cred].setdefault('periodos', []).append({
-                        "tipo": PERIODO_COMIDA, "hora": ahora,
-                        "cuadro": cuadro, "actividad": actividad
-                    })
-            self.texto_estado_jornada = f"COMIDA — Salida: {ahora}"
-            self.color_estado_jornada = [0.96, 0.65, 0.14, 1]
-            self.actualizar_lista_ui(app.trabajadores_detectados)
-            Snackbar(text=f"Salida a comida: {ahora}").open()
-            return
 
         count = 0
         for cred in list(app.trabajadores_detectados.keys()):
@@ -1031,12 +1028,10 @@ class PantallaAsistencia(Screen):
 
         etiquetas = {
             PERIODO_ENTRADA: "VALIDANDO ENTRADA",
-            PERIODO_REGRESO: "VALIDANDO REGRESO",
             PERIODO_CAMBIO:  "VALIDANDO CAMBIO DE CUADRO",
         }
         colores = {
             PERIODO_ENTRADA: [0.18, 0.42, 0.18, 1],
-            PERIODO_REGRESO: [0.18, 0.29, 0.55, 1],
             PERIODO_CAMBIO:  [0.55, 0.18, 0.55, 1],
         }
         self.texto_estado_jornada = etiquetas.get(tipo, tipo.upper())
@@ -1224,57 +1219,71 @@ class CuadrilleroAgriCactusApp(MDApp):
     _escucha_activa         = False
     _anuncio_activo         = False
     jornada_cerrada         = False
+    _multicast_lock         = None
+    _lock_intentado         = False
 
     def build(self):
-        # ------------------------------------------------------------------ #
-        #  Captura de errores al inicio: en lugar de cerrar la app muestra   #
-        #  el traceback en pantalla para poder diagnosticar en Android.      #
-        # ------------------------------------------------------------------ #
-        try:
-            self.theme_cls.theme_style     = "Light"
-            self.theme_cls.primary_palette = "Green"
-            controlador = Builder.load_string(KV)
-            Clock.schedule_once(self._restaurar_sesion, 0.5)
-            return controlador
-        except Exception:
-            error_txt = traceback.format_exc()
-            print(f"[CRASH] {error_txt}")
-            lay = FloatLayout()
-            lbl = MDLabel(
-                text=f"[b]ERROR AL INICIAR:[/b]\n\n{error_txt}",
-                markup=True,
-                halign="left",
-                valign="top",
-                theme_text_color="Custom",
-                text_color=(0.8, 0.1, 0.1, 1),
-                padding=(16, 16),
-            )
-            lbl.bind(size=lbl.setter('text_size'))
-            lay.add_widget(lbl)
-            return lay
+        self.theme_cls.theme_style     = "Light"
+        self.theme_cls.primary_palette = "Green"
+        controlador = Builder.load_string(KV)
+        Clock.schedule_once(self._restaurar_sesion, 0.5)
+        self._adquirir_multicast_lock()
+        return controlador
 
     def _restaurar_sesion(self, dt):
+        datos = cargar_datos()
+        if not datos:
+            return
+        pc = self.root.get_screen('credencial')
+        pc.nombre_cuadrillero = datos.get("nombre", "")
+        pc.nss                = datos.get("nss", "")
+        pc.num_credencial     = datos.get("credencial", "")
+        pc.num_cuadrilla      = datos.get("cuadrilla", "")
+        pc.ruta_foto          = datos.get("foto", "")
+        pc.fecha_ingreso      = datos.get("fecha_ingreso", "")
+        self.num_cuadrilla      = datos.get("cuadrilla", "")
+        self.nombre_cuadrillero = datos.get("nombre", "")
+        self.root.current = 'credencial'
+
+    # ── Fix de deteccion: en muchos dispositivos Android, WiFi descarta ───────
+    # paquetes UDP broadcast entrantes salvo que se pida un "multicast lock".
+    # Enviar (el Trabajador) funciona sin esto; RECIBIR (el Cuadrillero) es
+    # lo que fallaba en silencio. Esto es lo que corrige "no detecta".
+    def _adquirir_multicast_lock(self):
+        if self._lock_intentado:
+            return
+        self._lock_intentado = True
+        if platform != 'android':
+            return
         try:
-            datos = cargar_datos()
-            if not datos:
-                return
-            pc = self.root.get_screen('credencial')
-            pc.nombre_cuadrillero = datos.get("nombre", "")
-            pc.nss                = datos.get("nss", "")
-            pc.num_credencial     = datos.get("credencial", "")
-            pc.num_cuadrilla      = datos.get("cuadrilla", "")
-            pc.ruta_foto          = datos.get("foto", "")
-            pc.fecha_ingreso      = datos.get("fecha_ingreso", "")
-            self.num_cuadrilla      = datos.get("cuadrilla", "")
-            self.nombre_cuadrillero = datos.get("nombre", "")
-            self.root.current = 'credencial'
+            from jnius import autoclass, cast
+            PythonActivity = autoclass('org.kivy.android.PythonActivity')
+            Context        = autoclass('android.content.Context')
+            activity       = PythonActivity.mActivity
+            wifi_manager   = activity.getSystemService(Context.WIFI_SERVICE)
+            wifi_manager   = cast('android.net.wifi.WifiManager', wifi_manager)
+            self._multicast_lock = wifi_manager.createMulticastLock("agricactus_cuadrillero")
+            self._multicast_lock.setReferenceCounted(True)
+            self._multicast_lock.acquire()
+            print("[WIFI] Multicast lock adquirido correctamente.")
         except Exception as e:
-            print(f"[SESSION] Error restaurar sesion: {e}")
+            print(f"[WIFI] No se pudo adquirir multicast lock: {e}")
+
+    @staticmethod
+    def _mismo_cuadrilla(a, b):
+        a, b = str(a).strip(), str(b).strip()
+        if a == b:
+            return True
+        try:
+            return int(a) == int(b)
+        except ValueError:
+            return False
 
     def iniciar_escucha_trabajadores(self):
         if self._escucha_activa:
             return
         self._escucha_activa = True
+        self._adquirir_multicast_lock()
 
         pa = self.root.get_screen('asistencia')
         pa.estado_escucha       = "Activo"
@@ -1305,7 +1314,7 @@ class CuadrilleroAgriCactusApp(MDApp):
                                 puesto_clave = partes[8] if len(partes) > 8 else ""
                                 puesto_desc  = partes[9] if len(partes) > 9 else ""
 
-                                if cuad != str(self.num_cuadrilla):
+                                if not self._mismo_cuadrilla(cuad, self.num_cuadrilla):
                                     continue
 
                                 ahora   = datetime.datetime.now().strftime("%H:%M:%S")
@@ -1346,7 +1355,7 @@ class CuadrilleroAgriCactusApp(MDApp):
                         except socket.timeout:
                             continue
                         except Exception as e:
-                            print(f"[WIFI] Error recv: {e}")
+                            print(f"[WIFI] Error: {e}")
 
             except Exception as e:
                 print(f"[WIFI] Error servidor: {e}")
@@ -1420,7 +1429,6 @@ class CuadrilleroAgriCactusApp(MDApp):
         self._anuncio_activo = True
 
         def _anunciar():
-            import time
             while self._anuncio_activo:
                 try:
                     nombre_limpio = str(self.nombre_cuadrillero).replace(':', ' ').replace('\n', ' ')
@@ -1435,6 +1443,8 @@ class CuadrilleroAgriCactusApp(MDApp):
         threading.Thread(target=_anunciar, daemon=True).start()
 
     def iniciar_respuesta_apuntador(self):
+        self._adquirir_multicast_lock()
+
         def _escuchar():
             try:
                 with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
@@ -1477,11 +1487,71 @@ class CuadrilleroAgriCactusApp(MDApp):
             sock.sendto(datos, (addr[0], PUERTO_RECEPCION))
             Snackbar(text="Lista enviada al apuntador").open()
         except Exception as e:
-            print(f"[WIFI] Error enviar lista: {e}")
+            print(f"[WIFI] Error: {e}")
+
+    # ── Consulta de datos de empleado (registro -> laptop servidor RH) ───────
+    def buscar_empleado_red(self, credencial, callback_ok, callback_error):
+        """
+        Busca los datos de un empleado por credencial en el servidor local
+        (empleados_server.py corriendo en una laptop en el mismo WiFi).
+        """
+        credencial = str(credencial).strip()
+
+        def _worker():
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+                    sock.settimeout(TIMEOUT_CONSULTA_EMP)
+                    mensaje = f"CONSULTA_EMP|{credencial}".encode('utf-8')
+
+                    for _ in range(REINTENTOS_CONSULTA_EMP):
+                        try:
+                            sock.sendto(mensaje, ('255.255.255.255', PUERTO_CONSULTA_EMP))
+                            datos_raw, addr = sock.recvfrom(4096)
+                            msg    = datos_raw.decode('utf-8').strip()
+                            partes = msg.split('|')
+
+                            if partes[0] == 'EMP_OK' and len(partes) >= 2 and partes[1] == credencial:
+                                # EMP_OK|credencial|nombre|nss|cuadrilla|puesto_clave|puesto_desc
+                                resultado = {
+                                    "nombre":       partes[2] if len(partes) > 2 else "",
+                                    "nss":          partes[3] if len(partes) > 3 else "",
+                                    "cuadrilla":    partes[4] if len(partes) > 4 else "",
+                                    "puesto_clave": partes[5] if len(partes) > 5 else "",
+                                    "puesto_desc":  partes[6] if len(partes) > 6 else "",
+                                }
+                                Clock.schedule_once(lambda dt: callback_ok(resultado), 0)
+                                return
+
+                            if partes[0] == 'EMP_NOTFOUND' and len(partes) >= 2 and partes[1] == credencial:
+                                Clock.schedule_once(
+                                    lambda dt: callback_error(
+                                        f"No existe ningun empleado con credencial {credencial}"
+                                    ), 0
+                                )
+                                return
+                        except socket.timeout:
+                            continue
+
+                    Clock.schedule_once(
+                        lambda dt: callback_error(
+                            "Sin respuesta del servidor. Verifica que la laptop "
+                            "este encendida y conectada al mismo WiFi."
+                        ), 0
+                    )
+            except Exception as e:
+                Clock.schedule_once(lambda dt, err=str(e): callback_error(f"Error de red: {err}"), 0)
+
+        threading.Thread(target=_worker, daemon=True).start()
 
     def on_stop(self):
         self._escucha_activa = False
         self._anuncio_activo = False
+        if self._multicast_lock is not None:
+            try:
+                self._multicast_lock.release()
+            except Exception:
+                pass
 
 
 if __name__ == '__main__':
