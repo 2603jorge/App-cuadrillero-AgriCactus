@@ -4,6 +4,7 @@
 # =============================================================================
 
 import datetime
+import traceback
 import json
 import os
 import socket
@@ -11,6 +12,7 @@ import threading
 import time
 
 from kivy.lang import Builder
+from kivy.base import ExceptionHandler, ExceptionManager
 from kivy.clock import Clock
 from kivy.properties import StringProperty, BooleanProperty, ListProperty
 from kivy.uix.screenmanager import Screen, FadeTransition
@@ -131,6 +133,24 @@ def guardar_lista(datos: dict):
     except Exception as e:
         print(f"[STORAGE] Error lista: {e}")
 
+
+
+# =============================================================================
+#  MANEJADOR DE ERRORES -- registra cualquier fallo inesperado en un archivo
+#  local (crash_log.txt) para poder diagnosticar problemas en telefonos
+#  especificos sin necesitar computadora ni logs de GitHub Actions.
+# =============================================================================
+class ManejadorErrores(ExceptionHandler):
+    def handle_exception(self, inst):
+        try:
+            with open('crash_log.txt', 'a', encoding='utf-8') as f:
+                f.write(f"\n{'='*60}\n{datetime.datetime.now().isoformat()}\n")
+                f.write(''.join(traceback.format_exception(type(inst), inst, inst.__traceback__)))
+        except Exception:
+            pass
+        return ExceptionManager.PASS
+
+ExceptionManager.add_handler(ManejadorErrores())
 
 KV = '''
 #:import FadeTransition kivy.uix.screenmanager.FadeTransition
@@ -1226,9 +1246,36 @@ class CuadrilleroAgriCactusApp(MDApp):
         self.theme_cls.theme_style     = "Light"
         self.theme_cls.primary_palette = "Green"
         controlador = Builder.load_string(KV)
+        self._solicitar_permisos()
         Clock.schedule_once(self._restaurar_sesion, 0.5)
         self._adquirir_multicast_lock()
         return controlador
+
+    # ── Solicitud activa de permisos ──────────────────────────────────────────
+    def _solicitar_permisos(self):
+        if platform != 'android':
+            return
+        try:
+            from android.permissions import request_permissions, Permission
+            permisos = [
+                Permission.ACCESS_FINE_LOCATION,
+                Permission.ACCESS_COARSE_LOCATION,
+                Permission.ACCESS_WIFI_STATE,
+                Permission.CHANGE_WIFI_MULTICAST_STATE,
+                Permission.CAMERA,
+                Permission.WRITE_EXTERNAL_STORAGE,
+                Permission.READ_EXTERNAL_STORAGE,
+            ]
+            try:
+                permisos.append(Permission.NEARBY_WIFI_DEVICES)  # Android 13+
+            except AttributeError:
+                pass
+            request_permissions(permisos, self._al_resultado_permisos)
+        except Exception as e:
+            print(f"[PERMISOS] Error solicitando permisos: {e}")
+
+    def _al_resultado_permisos(self, permisos, resultados):
+        print(f"[PERMISOS] Resultado: {dict(zip(permisos, resultados))}")
 
     def _restaurar_sesion(self, dt):
         datos = cargar_datos()
